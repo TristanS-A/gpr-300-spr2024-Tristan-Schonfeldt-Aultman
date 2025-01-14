@@ -45,14 +45,15 @@ ew::Camera camera;
 ew::CameraController camController;
 ew::Transform suzanneTransform;
 Material mats[3] = { 
-	{0.8, 0.5, 1.0, 30, "Metal"},
-	{0.9, 0.6, 0.1, 128, "Rock"},
-	{1.0, 0.7, 0.2, 140, "Plastic"}
+	{1.0, 0.6, 1.0, 30, "Metal"},
+	{1.0, 0.8, 0.3, 128, "Rock"},
+	{1.0, 0.8, 0.4, 30, "Plastic"}
 };
 short matIndex = 0;
 Material* currMat = &mats[matIndex];
+bool usingNormalMap = true;
 
-void thing(ew::Shader shader, ew::Model model, ew::Transform &modelTransform, GLint tex, const float dt)
+void thing(ew::Shader shader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, const float dt)
 {
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -66,11 +67,16 @@ void thing(ew::Shader shader, ew::Model model, ew::Transform &modelTransform, GL
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
 
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, normalMap);
+
 	shader.use();
 	modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
 	shader.setMat4("_Model", modelTransform.modelMatrix());
 	shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 	shader.setInt("_MainTex", 0);
+	shader.setInt("_NormalMap", 1);
+	shader.setBool("_Use_NormalMap", usingNormalMap);
 	shader.setVec3("_EyePos", camera.position);
 
 	shader.setFloat("_Material.ambientK", currMat->ambientK);
@@ -92,9 +98,10 @@ int main() {
 
 	ew::Shader lit_Shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 
-	ew::Model suzanne = ew::Model("assets/suzanne.fbx");
+	ew::Model suzanne = ew::Model("assets/suzanne.obj");
 
-	GLint brickTexture = ew::loadTexture("assets/brick_color.jpg");
+	GLint Rock_Color = ew::loadTexture("assets/Rock_Color.png");
+	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -105,7 +112,7 @@ int main() {
 
 		//RENDER
 		camController.move(window, &camera, deltaTime);
-		thing(lit_Shader, suzanne, suzanneTransform, brickTexture, deltaTime);
+		thing(lit_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
 		drawUI();
 
 		glfwSwapBuffers(window);
@@ -145,6 +152,7 @@ void drawUI() {
 			}
 		}
 	}
+	ImGui::Checkbox("Using Normal Map", &usingNormalMap);
 	ImGui::End();
 
 	ImGui::Render();
