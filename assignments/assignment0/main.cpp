@@ -25,10 +25,32 @@ int screenHeight = 720;
 float prevFrameTime;
 float deltaTime;
 
+struct Material
+{
+	float ambientK = 1.0;
+	float diffuseK = 0.5;
+	float specularK = 0.5;
+	float shininess = 128;
+	char* name = "Default";
+};
+
+enum Materials {
+	METAL,
+	ROCK,
+	PLASTIC
+};
+
 //Caching things
 ew::Camera camera;
 ew::CameraController camController;
 ew::Transform suzanneTransform;
+Material mats[3] = { 
+	{0.8, 0.5, 1.0, 30, "Metal"},
+	{0.9, 0.6, 0.1, 128, "Rock"},
+	{1.0, 0.7, 0.2, 140, "Plastic"}
+};
+short matIndex = 0;
+Material* currMat = &mats[matIndex];
 
 void thing(ew::Shader shader, ew::Model model, ew::Transform &modelTransform, GLint tex, const float dt)
 {
@@ -51,6 +73,11 @@ void thing(ew::Shader shader, ew::Model model, ew::Transform &modelTransform, GL
 	shader.setInt("_MainTex", 0);
 	shader.setVec3("_EyePos", camera.position);
 
+	shader.setFloat("_Material.ambientK", currMat->ambientK);
+	shader.setFloat("_Material.diffuseK", currMat->diffuseK);
+	shader.setFloat("_Material.specularK", currMat->specularK);
+	shader.setFloat("_Material.shininess", currMat->shininess);
+
 	model.draw();
 }
 
@@ -65,7 +92,7 @@ int main() {
 
 	ew::Shader lit_Shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 
-	ew::Model suzanne = ew::Model("assets/suzanne.obj");
+	ew::Model suzanne = ew::Model("assets/suzanne.fbx");
 
 	GLint brickTexture = ew::loadTexture("assets/brick_color.jpg");
 
@@ -93,7 +120,31 @@ void drawUI() {
 	ImGui::NewFrame();
 
 	ImGui::Begin("Settings");
-	ImGui::Text("Add Controls Here!");
+	if (ImGui::BeginCombo("Select Material", currMat->name))
+	{
+		for (int i = 0; i < sizeof(mats) / sizeof(mats[0]); i++)
+		{
+			bool is_selected = (currMat->name == mats[i].name);
+			if (ImGui::Selectable(mats[i].name, is_selected))
+			{
+				currMat = &mats[i];
+			}
+		}
+		ImGui::EndCombo();
+	}
+	if (ImGui::CollapsingHeader("Edit Materials"))
+	{
+		for (int i = 0; i < sizeof(mats) / sizeof(mats[0]); i++)
+		{
+			if (ImGui::CollapsingHeader(mats[i].name))
+			{
+				ImGui::SliderFloat("AmbientK", &mats[i].ambientK, 0.0, 1.0);
+				ImGui::SliderFloat("DiffuseK", &mats[i].diffuseK, 0.0, 1.0);
+				ImGui::SliderFloat("SpecularK", &mats[i].specularK, 0.0, 1.0);
+				ImGui::SliderFloat("Shininess", &mats[i].shininess, 2.0, 1024.0);
+			}
+		}
+	}
 	ImGui::End();
 
 	ImGui::Render();
