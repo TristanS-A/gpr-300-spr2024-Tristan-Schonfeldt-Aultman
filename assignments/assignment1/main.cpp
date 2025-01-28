@@ -52,6 +52,13 @@ struct Framebuffer
 	GLuint depth;
 } framebuffer;
 
+struct FullscreenQuad 
+{
+	GLuint vao;
+	GLuint vbo;
+
+} fullscreenQuad;
+
 enum Materials {
 	METAL,
 	ROCK,
@@ -79,8 +86,24 @@ std::vector<std::tuple<std::string, ToonShading::Palette>> palette = {
 	{"Rainy Night", {{0.24f, 0.36f, 0.54f}, {0.25f, 0.31f, 0.31f}}},
 };
 
-void thing(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, GLint zaToon, const float dt)
+static float quadVertecies[] = {
+	// pos (x, y) texcoord (u, v)
+	-1.0f,  1.0f, 0.0f, 1.0f,
+	-1.0f, -1.0f, 0.0f, 0.0f,
+	1.0f, -1.0f, 1.0f, 0.0f,
+
+	-1.0f,  1.0f, 0.0f, 1.0f,
+	1.0f, -1.0f, 1.0f, 0.0f,
+	1.0f,  1.0f, 1.0f, 1.0f,
+};
+
+void render(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, GLint zaToon, const float dt)
 {
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
@@ -117,6 +140,8 @@ void thing(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, G
 	shader.setFloat("_Material.shininess", currMat->shininess);
 
 	model.draw();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 int main() {
@@ -129,6 +154,11 @@ int main() {
 	camera.fov = 60.0f;
 	camController.sprintMoveSpeed = 20;
 
+	ew::Shader chromaticAborationShader = ew::Shader("assets/chromaticAboration.vert", "assets/chromaticAboration.frag");
+	ew::Shader blurrShader = ew::Shader("assets/blurr.vert", "assets/blurr.frag");
+	ew::Shader grayScaleShader = ew::Shader("assets/grayScale.vert", "assets/grayScale.frag");
+	ew::Shader inverseShader = ew::Shader("assets/inverse.vert", "assets/inverse.frag");
+	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
 	ew::Shader lit_Shader = ew::Shader("assets/toon.vert", "assets/toon.frag");
 
 	ew::Model suzanne = ew::Model("assets/skull.obj");
@@ -138,7 +168,7 @@ int main() {
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 	GLint zaToon = ew::loadTexture("assets/ZAtoon.png");
 
-	//BInd framebuffer
+	//Bind framebuffer
 	glGenFramebuffers(1, &framebuffer.fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
@@ -150,6 +180,24 @@ int main() {
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer.color0, 0);
 
+	//Initialize fullscreen quad
+	glGenVertexArrays(1, &fullscreenQuad.vao);
+	glGenBuffers(1, &fullscreenQuad.vbo);
+
+	//Bind vao and vbo
+	glBindVertexArray(fullscreenQuad.vao);
+	glBindBuffer(GL_ARRAY_BUFFER, fullscreenQuad.vbo);
+
+	//Buffer data to vbo
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertecies), &quadVertecies, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0); //Position
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void*)0);
+	glEnableVertexAttribArray(1); //Text coords
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void*) (sizeof(float) * 2));
+
+	glBindVertexArray(0);
+
 	//Check if frame buffer was created
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 	{
@@ -158,7 +206,6 @@ int main() {
 	}
 
 	while (!glfwWindowShouldClose(window)) {
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 		glfwPollEvents();
 
 		float time = (float)glfwGetTime();
@@ -167,10 +214,24 @@ int main() {
 
 		//RENDER
 		camController.move(window, &camera, deltaTime);
-		thing(lit_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
+
+		render(lit_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
+
+		glDisable(GL_DEPTH_TEST);
+
+		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		chromaticAborationShader.use();
+		chromaticAborationShader.setInt("_MainTex", 0);
+		glBindVertexArray(fullscreenQuad.vao);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glBindVertexArray(0);
 
 
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		drawUI();
 		glfwSwapBuffers(window);
 	}
