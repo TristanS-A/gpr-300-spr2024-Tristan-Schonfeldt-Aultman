@@ -99,20 +99,71 @@ namespace tsa
 
 	struct BlurrData : PPShaderData
 	{
-		float strength = 9;
+		float strength = 300;
 
 		BlurrData() : PPShaderData() {};
 
 		void display(Framebuffer framebuffer) override
 		{
 			PPShaderData::display(framebuffer);
-			shaderProgram.setFloat("_Strength", strength);
+			shaderProgram.setFloat("_InvStrrength", strength);
 		}
 
 		void ImGuiDisplay() override
 		{
 
-			ImGui::SliderFloat("Blurr Strength", &strength, 0.0, 10000);
+			ImGui::SliderFloat("Inverse Blurr Strength", &strength, 0.0, 500);
+		}
+	};
+
+	struct GrayScaleData : PPShaderData
+	{
+		bool realistic = true;
+
+		GrayScaleData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			if (realistic) 
+			{
+				shaderProgram.setVec3("_RealisticScale", glm::vec3(0.2126f, 0.7152f, 0.0722f));
+				shaderProgram.setFloat("_AvarageScale", 1.0f);
+			}
+			else 
+			{
+				shaderProgram.setVec3("_RealisticScale", glm::vec3(1.0f, 1.0f, 1.0f));
+				shaderProgram.setFloat("_AvarageScale", 3.0f);
+			}
+
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::Checkbox("Use Realistic Grayscale", &realistic);
+		}
+	};
+
+	struct InverseData : PPShaderData
+	{
+		float invAmount = 1.0;
+
+		InverseData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			shaderProgram.setFloat("_InverseSlider", invAmount);
+
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::SliderFloat("Inverse Amount", &invAmount, 0.0f, 1.0f);
 		}
 	};
 }

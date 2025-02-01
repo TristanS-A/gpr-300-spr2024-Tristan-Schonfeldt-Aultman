@@ -5,9 +5,9 @@ out vec4 FragColor;
 in vec2 vs_textcoords;
 
 uniform sampler2D _MainTex;
-uniform float _Strength;
+uniform float _InvStrrength;
 
-const float offset = 1.0 / 300.0;
+const float offset = 1.0 / _InvStrrength;
 const vec2 offsets[9] = vec2[]
 (
 	vec2(-offset, offset), //Top-left
@@ -31,6 +31,7 @@ const float kernal[9] = float[]
 	1.0, 1.0, 1.0
 );
 
+const float strength = 9;
 
 void main() 
 {
@@ -45,7 +46,7 @@ void main()
 	for (int i = 0; i < 9; i++)
 	{
 		vec3 local = texture(_MainTex, vs_textcoords + offsets[i]).rgb;
-		average += local * (kernal[i] / _Strength);
+		average += local * (kernal[i] / strength);
 	}
 
 	vec3 albedoColor = texture(_MainTex, vs_textcoords).rgb;

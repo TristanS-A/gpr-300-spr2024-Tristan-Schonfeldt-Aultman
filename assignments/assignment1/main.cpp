@@ -197,8 +197,16 @@ int main() {
 	blurrShader->displayName = "Blurr Effect";
 	ppShaderMap[BLURR] = blurrShader;
 
-	ew::Shader grayScaleShader = ew::Shader("assets/grayScale.vert", "assets/grayScale.frag");
-	ew::Shader inverseShader = ew::Shader("assets/inverse.vert", "assets/inverse.frag");
+	tsa::GrayScaleData* grayScaleShader = new tsa::GrayScaleData();
+	grayScaleShader->shaderProgram = ew::Shader("assets/grayScale.vert", "assets/grayScale.frag");
+	grayScaleShader->displayName = "Grayscale Effect";
+	ppShaderMap[GRAYSCALE] = grayScaleShader;
+
+	tsa::InverseData* inverseShader = new tsa::InverseData();
+	inverseShader->shaderProgram = ew::Shader("assets/inverse.vert", "assets/inverse.frag");
+	inverseShader->displayName = "Inverse Effect";
+	ppShaderMap[INVERSE] = inverseShader;
+
 	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
 	ew::Shader lit_Shader = ew::Shader("assets/toon.vert", "assets/toon.frag");
 
@@ -328,6 +336,8 @@ void drawUI() {
 	{
 		ppShaderMap[currPPShader]->ImGuiDisplay();
 	}
+
+	ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
 	ImGui::Checkbox("Using Normal Map", &usingNormalMap);
 
