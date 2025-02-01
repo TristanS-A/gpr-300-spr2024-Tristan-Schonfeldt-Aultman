@@ -15,6 +15,10 @@
 #include <ew/transform.h>
 #include <ew/texture.h>
 #include <tuple>
+#include <unordered_map>
+
+#include <tsa/framebuffer.h>
+#include <tsa/shaderStructs.h>
 
 namespace ToonShading
 {
@@ -24,6 +28,16 @@ namespace ToonShading
 		glm::vec3 shadow;
 	} Palette;
 }
+
+enum PostProcessShaders
+{
+	FOG,
+	CHROMATIC_ABORATION,
+	GRAYSCALE,
+	INVERSE,
+	EDGE_DETECTION,
+	BLURR
+};
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
@@ -43,14 +57,6 @@ struct Material
 	float shininess = 128;
 	char* name = "Default";
 };
-
-struct Framebuffer
-{
-	GLuint fbo;
-	GLuint color0;
-	GLuint color1;
-	GLuint depth;
-} framebuffer;
 
 struct FullscreenQuad 
 {
@@ -77,6 +83,9 @@ Material mats[3] = {
 short matIndex = 0;
 Material* currMat = &mats[matIndex];
 bool usingNormalMap = true;
+tsa::Framebuffer framebuffer = tsa::createFrameBuffer();
+PostProcessShaders currPPShader = FOG;
+std::unordered_map<PostProcessShaders, tsa::PPShaderData*> ppShaderMap;
 
 static int palette_index = 0;
 std::vector<std::tuple<std::string, ToonShading::Palette>> palette = {
@@ -99,15 +108,14 @@ static float quadVertecies[] = {
 
 void render(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, GLint zaToon, const float dt)
 {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
-
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
+	glClear(GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
 	//GFX Pass
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -144,6 +152,18 @@ void render(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void cleanupShaders()
+{
+	auto it = ppShaderMap.begin();
+	while (it != ppShaderMap.end())
+	{
+		delete it->second;
+		it++;
+	}
+
+	ppShaderMap.clear();
+}
+
 int main() {
 	GLFWwindow* window = initWindow("Work Session 0", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
@@ -154,8 +174,29 @@ int main() {
 	camera.fov = 60.0f;
 	camController.sprintMoveSpeed = 20;
 
-	ew::Shader chromaticAborationShader = ew::Shader("assets/chromaticAboration.vert", "assets/chromaticAboration.frag");
-	ew::Shader blurrShader = ew::Shader("assets/blurr.vert", "assets/blurr.frag");
+	tsa::FogShaderData* fogShader = new tsa::FogShaderData();
+	fogShader->shaderProgram = ew::Shader("assets/fog.vert", "assets/fog.frag");
+	fogShader->farPlane = camera.farPlane;
+	fogShader->nearPlane = camera.nearPlane;
+	fogShader->fogcolor = glm::vec3(0.8f, 0.8f, 0.8f);
+	fogShader->displayName = "Fog Effect";
+	ppShaderMap[FOG] = fogShader;
+
+	tsa::EdgeDetectionData* edgeDetectionShader = new tsa::EdgeDetectionData();
+	edgeDetectionShader->shaderProgram = ew::Shader("assets/edgeDetection.vert", "assets/edgeDetection.frag");
+	edgeDetectionShader->displayName = "Edge Detection Effect";
+	ppShaderMap[EDGE_DETECTION] = edgeDetectionShader;
+
+	tsa::ChromaticAborationData* chromaticAborationShader = new tsa::ChromaticAborationData();
+	chromaticAborationShader->shaderProgram = ew::Shader("assets/chromaticAboration.vert", "assets/chromaticAboration.frag");
+	chromaticAborationShader->displayName = "Chromatic Aboration Effect";
+	ppShaderMap[CHROMATIC_ABORATION] = chromaticAborationShader;
+
+	tsa::BlurrData* blurrShader = new tsa::BlurrData();
+	blurrShader->shaderProgram = ew::Shader("assets/blurr.vert", "assets/blurr.frag");
+	blurrShader->displayName = "Blurr Effect";
+	ppShaderMap[BLURR] = blurrShader;
+
 	ew::Shader grayScaleShader = ew::Shader("assets/grayScale.vert", "assets/grayScale.frag");
 	ew::Shader inverseShader = ew::Shader("assets/inverse.vert", "assets/inverse.frag");
 	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
@@ -172,13 +213,35 @@ int main() {
 	glGenFramebuffers(1, &framebuffer.fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
+	//Create color texture attachment
 	glGenTextures(1, &framebuffer.color0);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	//Bind color attachment
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer.color0, 0);
+
+	//Create depth texture attachment
+	glGenTextures(1, &framebuffer.depthColor);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.depthColor);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	//Bind depth texture attachment
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, framebuffer.depthColor, 0);
+
+	//Generate and bind rbo
+	/*glGenRenderbuffers(1, &framebuffer.depthColor);
+	glBindRenderbuffer(GL_RENDERBUFFER, framebuffer.depthColor);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, framebuffer.depthColor);*/
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	//Initialize fullscreen quad
 	glGenVertexArrays(1, &fullscreenQuad.vao);
@@ -217,16 +280,14 @@ int main() {
 
 		render(lit_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
 
-		glDisable(GL_DEPTH_TEST);
-
 		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+		glDisable(GL_DEPTH_TEST);
 
-		chromaticAborationShader.use();
-		chromaticAborationShader.setInt("_MainTex", 0);
 		glBindVertexArray(fullscreenQuad.vao);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
+
+		ppShaderMap[currPPShader]->display(framebuffer);
+
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		glBindVertexArray(0);
@@ -235,6 +296,8 @@ int main() {
 		drawUI();
 		glfwSwapBuffers(window);
 	}
+
+	cleanupShaders();
 	printf("Shutting down...");
 }
 
@@ -245,31 +308,27 @@ void drawUI() {
 	ImGui::NewFrame();
 
 	ImGui::Begin("Settings");
-	if (ImGui::BeginCombo("Select Material", currMat->name))
+
+	if (ImGui::CollapsingHeader("Select Post Process Effect"))
 	{
-		for (int i = 0; i < sizeof(mats) / sizeof(mats[0]); i++)
+		auto it = ppShaderMap.begin();
+		while (it != ppShaderMap.end())
 		{
-			bool is_selected = (currMat->name == mats[i].name);
-			if (ImGui::Selectable(mats[i].name, is_selected))
+			bool is_selected = (currPPShader == it->first);
+			if (ImGui::Selectable(it->second->displayName, is_selected))
 			{
-				currMat = &mats[i];
+				currPPShader = it->first;
 			}
-		}
-		ImGui::EndCombo();
-	}
-	if (ImGui::CollapsingHeader("Edit Materials"))
-	{
-		for (int i = 0; i < sizeof(mats) / sizeof(mats[0]); i++)
-		{
-			if (ImGui::CollapsingHeader(mats[i].name))
-			{
-				ImGui::SliderFloat("AmbientK", &mats[i].ambientK, 0.0, 1.0);
-				ImGui::SliderFloat("DiffuseK", &mats[i].diffuseK, 0.0, 1.0);
-				ImGui::SliderFloat("SpecularK", &mats[i].specularK, 0.0, 1.0);
-				ImGui::SliderFloat("Shininess", &mats[i].shininess, 2.0, 1024.0);
-			}
+
+			it++;
 		}
 	}
+
+	if (ImGui::CollapsingHeader("Edit Post Process Effect"))
+	{
+		ppShaderMap[currPPShader]->ImGuiDisplay();
+	}
+
 	ImGui::Checkbox("Using Normal Map", &usingNormalMap);
 
 	if (ImGui::BeginCombo("Palette", std::get<std::string>(palette[palette_index]).c_str()))
@@ -344,4 +403,3 @@ GLFWwindow* initWindow(const char* title, int width, int height) {
 
 	return window;
 }
-

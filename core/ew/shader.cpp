@@ -89,6 +89,7 @@ namespace ew {
 		std::string fragmentShaderSource = ew::loadShaderSourceFromFile(fragmentShader.c_str());
 		m_id = ew::createShaderProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());
 	}
+	Shader::Shader() {};
 	void Shader::use()const
 	{
 		glUseProgram(m_id);

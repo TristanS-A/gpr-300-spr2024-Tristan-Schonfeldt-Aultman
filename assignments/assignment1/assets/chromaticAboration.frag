@@ -6,12 +6,12 @@ in vec2 vs_textcoords;
 
 uniform sampler2D _MainTex;
 
-const vec3 offset = vec3(0.009, 0.006, -0.006);
-const vec2 direction = vec2(1.0);
+uniform vec3 _Offset;
+uniform vec2 _Direction;
 
 void main() 
 {
-	FragColor.r = texture(_MainTex, vs_textcoords + (direction * vec2(offset.r))).r;
-	FragColor.g = texture(_MainTex, vs_textcoords + (direction * vec2(offset.g))).g;
-	FragColor.b = texture(_MainTex, vs_textcoords + (direction * vec2(offset.b))).b;
+	FragColor.r = texture(_MainTex, vs_textcoords + (_Direction * vec2(_Offset.r))).r;
+	FragColor.g = texture(_MainTex, vs_textcoords + (_Direction * vec2(_Offset.g))).g;
+	FragColor.b = texture(_MainTex, vs_textcoords + (_Direction * vec2(_Offset.b))).b;
 }

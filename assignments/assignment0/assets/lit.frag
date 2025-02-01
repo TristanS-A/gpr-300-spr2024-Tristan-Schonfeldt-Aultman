@@ -64,7 +64,7 @@ void main()
 	lightColor += _AmbientColor * _Material.ambientK;
 
 	//Calculate final light color
-	//FragColor = vec4(normal * 0.5 + 0.5, 1.0);
+	FragColor = vec4(normal * 0.5 + 0.5, 1.0);
 	vec3 objectColor = texture(_MainTex, fs_surface.texcoord).rgb;
-	FragColor = vec4(objectColor * lightColor, 1.0);
+	//FragColor = vec4(objectColor * lightColor, 1.0);
 }
