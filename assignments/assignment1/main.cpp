@@ -44,8 +44,8 @@ GLFWwindow* initWindow(const char* title, int width, int height);
 void drawUI();
 
 //Global state
-int screenWidth = 1080;
-int screenHeight = 720;
+int screenWidth = 800;
+int screenHeight = 600;
 float prevFrameTime;
 float deltaTime;
 
@@ -233,8 +233,8 @@ int main() {
 	GLint zaToon = ew::loadTexture("assets/ZAtoon.png");
 
 	framebuffer = tsa::createBloomHDRFrameBuffer();
-	pingPongBuffers[0] = tsa::createHDRFrameBuffer();
-	pingPongBuffers[1] = tsa::createHDRFrameBuffer();
+	pingPongBuffers[0] = tsa::createFrameBuffer();
+	pingPongBuffers[1] = tsa::createFrameBuffer();
 
 	//Check if frame buffer was created
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -273,14 +273,15 @@ int main() {
 
 		render(lit_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
 
-		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 
 		glBindVertexArray(fullscreenQuad.vao);
+		glViewport(0, 0, 800, 600);
 
 		bool horizontal = true, first_iteration = true;
-		int amount = 1;
+		int amount = 10;
 		ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
 		gBlurrShader.use();
 		for (unsigned int i = 0; i < amount; i++)
