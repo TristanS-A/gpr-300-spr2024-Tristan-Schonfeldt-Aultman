@@ -57,6 +57,43 @@ namespace tsa
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 800, 600, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		//Bind color attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frameBuffer.color0, 0);
+
+		//Create depth texture attachment
+		glGenTextures(1, &frameBuffer.depthColor);
+		glBindTexture(GL_TEXTURE_2D, frameBuffer.depthColor);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		//Bind depth texture attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, frameBuffer.depthColor, 0);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		return frameBuffer;
+	}
+
+	Framebuffer createBloomHDRFrameBuffer()
+	{
+		Framebuffer frameBuffer;
+
+		//Bind framebuffer
+		glGenFramebuffers(1, &frameBuffer.fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer.fbo);
+
+		//Create color texture attachment
+		glGenTextures(1, &frameBuffer.color0);
+		glBindTexture(GL_TEXTURE_2D, frameBuffer.color0);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 800, 600, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 		//Create brightness texture attachment
 		glGenTextures(1, &frameBuffer.brightness);
@@ -64,15 +101,17 @@ namespace tsa
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 800, 600, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		GLuint arr[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-		glDrawBuffers(2, arr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 		//Bind color attachment
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frameBuffer.color0, 0);
 
 		//Bind brightness attachment
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, frameBuffer.brightness, 0);
+
+		GLuint arr[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		glDrawBuffers(2, arr);
 
 		//Create depth texture attachment
 		glGenTextures(1, &frameBuffer.depthColor);

@@ -128,7 +128,6 @@ namespace tsa
 
 		void ImGuiDisplay() override
 		{
-
 			ImGui::SliderFloat("Inverse Blurr Strength", &strength, 0.0, 500);
 		}
 	};

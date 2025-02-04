@@ -34,7 +34,9 @@ enum PostProcessShaders
 	INVERSE,
 	EDGE_DETECTION,
 	BLURR,
-	GAUSSEN_BLUR
+	GAUSSEN_BLUR,
+	HDR,
+	BLOOM
 };
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
@@ -209,10 +211,19 @@ int main() {
 	inverseShader->displayName = "Inverse Effect";
 	ppShaderMap[INVERSE] = inverseShader;
 
-	ew::Shader hdrShader = ew::Shader("assets/hdr.vert", "assets/hdr.frag");
+	tsa::PPShaderData* hdrShader = new tsa::PPShaderData();
+	hdrShader->shaderProgram = ew::Shader("assets/hdr.vert", "assets/hdr.frag");
+	hdrShader->displayName = "HDR Effect";
+	ppShaderMap[HDR] = hdrShader;
+
+	tsa::PPShaderData* bloomShader = new tsa::PPShaderData();
+	bloomShader->shaderProgram = ew::Shader("assets/bloom.vert", "assets/bloom.frag");
+	bloomShader->displayName = "Bloom Effect";
+	ppShaderMap[BLOOM] = bloomShader;
 
 	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
-	ew::Shader lit_Shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	//ew::Shader lit_Shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader lit_Shader = ew::Shader("assets/bloomLit.vert", "assets/bloomLit.frag");
 
 	ew::Model suzanne = ew::Model("assets/Suzanne.fbx");
 	suzanneTransform.scale = glm::vec3(0.1f);
@@ -221,7 +232,7 @@ int main() {
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 	GLint zaToon = ew::loadTexture("assets/ZAtoon.png");
 
-	framebuffer = tsa::createHDRFrameBuffer();
+	framebuffer = tsa::createBloomHDRFrameBuffer();
 	pingPongBuffers[0] = tsa::createHDRFrameBuffer();
 	pingPongBuffers[1] = tsa::createHDRFrameBuffer();
 
@@ -268,50 +279,51 @@ int main() {
 
 		glBindVertexArray(fullscreenQuad.vao);
 
-		pingPongBuffers[1].color0 = framebuffer.brightness;
-
-		pingPongIndex = 0;
-		for (int i = 0; i < 1; i++)
+		bool horizontal = true, first_iteration = true;
+		int amount = 1;
+		ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
+		gBlurrShader.use();
+		for (unsigned int i = 0; i < amount; i++)
 		{
-			if (pingPongIndex % 2 == 0)
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[0].fbo);
-
-				ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
-
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, pingPongBuffers[1].color0);
-
-				gBlurrShader.use();
-				gBlurrShader.setInt("_MainTex", 0);
-
-				glDrawArrays(GL_TRIANGLES, 0, 6);
-
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			}
-			else 
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[1].fbo);
-
-				ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
-
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, pingPongBuffers[0].color0);
-
-				gBlurrShader.use();
-				gBlurrShader.setInt("_MainTex", 0);
-
-				glDrawArrays(GL_TRIANGLES, 0, 6);
-
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			}
-
-			pingPongIndex++;
+			glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[horizontal].fbo);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(
+				GL_TEXTURE_2D, first_iteration ? framebuffer.brightness : pingPongBuffers[!horizontal].color0
+			);
+			gBlurrShader.setInt("_MainTex", 0);
+			gBlurrShader.setFloat("_InvStrrength", 300);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+			horizontal = !horizontal;
+			if (first_iteration)
+				first_iteration = false;
 		}
 
-		framebuffer.color0 = pingPongBuffers[pingPongIndex % 2 == 0].color0;
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		ppShaderMap[currPPShader]->display(framebuffer);
+		ew::Shader bloomShader = ppShaderMap[BLOOM]->shaderProgram;
+		bloomShader.use();
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
+		bloomShader.setInt("_SceneColor", 0);
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, pingPongBuffers[!horizontal].color0);
+		bloomShader.setInt("_BloomBlurr", 1);
+
+		//ppShaderMap[currPPShader]->display(framebuffer);
+
+
+		////HDR
+		/*glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		ew::Shader hdrShader = ppShaderMap[HDR]->shaderProgram;
+		hdrShader.use();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(
+			GL_TEXTURE_2D, framebuffer.color0
+		);
+		hdrShader.setInt("_MainTex", 0);*/
 
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 

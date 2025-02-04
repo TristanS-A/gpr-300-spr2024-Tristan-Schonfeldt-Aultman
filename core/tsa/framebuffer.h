@@ -15,4 +15,5 @@ namespace tsa
 
 	Framebuffer createFrameBuffer();
 	Framebuffer createHDRFrameBuffer();
+	Framebuffer createBloomHDRFrameBuffer();
 }
