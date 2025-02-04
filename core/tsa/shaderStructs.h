@@ -1,9 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <math.h>
-#include <ew/external/glad.h>
-#include <GLFW/glfw3.h>
-#include <ew/shader.h>
+#include "../ew/shader.h"
 
 namespace tsa
 {
@@ -27,9 +25,9 @@ namespace tsa
 
 	struct FogShaderData : PPShaderData
 	{
-		float nearPlane;
-		float farPlane;
-		glm::vec3 fogcolor;
+		float nearPlane = 0;
+		float farPlane = 0;
+		glm::vec3 fogcolor = glm::vec3(0.0, 0.0, 0.0);
 
 		FogShaderData() : PPShaderData() {};
 
@@ -102,6 +100,25 @@ namespace tsa
 		float strength = 300;
 
 		BlurrData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+			shaderProgram.setFloat("_InvStrrength", strength);
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::SliderFloat("Inverse Blurr Strength", &strength, 0.0, 500);
+		}
+	};
+
+	struct GaussenBlurrData : PPShaderData
+	{
+		float strength = 300;
+
+		GaussenBlurrData() : PPShaderData() {};
 
 		void display(Framebuffer framebuffer) override
 		{

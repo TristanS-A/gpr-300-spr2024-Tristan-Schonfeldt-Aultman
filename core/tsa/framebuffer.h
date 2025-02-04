@@ -1,4 +1,5 @@
 #pragma once
+#include "../ew/external/glad.h"
 #include <GLFW/glfw3.h>
 
 namespace tsa 
@@ -8,9 +9,10 @@ namespace tsa
 		GLuint fbo;
 		GLuint rbo;
 		GLuint color0;
-		GLuint color1;
+		GLuint brightness;
 		GLuint depthColor;
 	};
 
-	Framebuffer createFrameBuffer(GLuint fbo = 0, GLuint color0 = 0, GLuint color1 = 0);
+	Framebuffer createFrameBuffer();
+	Framebuffer createHDRFrameBuffer();
 }

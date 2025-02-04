@@ -1,5 +1,8 @@
 #version 450
 
+layout (location = 0) out vec4 fragColor;
+layout (location = 1) out vec4 fragBright;
+
 in vec3 out_Normal;
 in Surface 
 {
@@ -17,8 +20,6 @@ struct Material
 	float shininess;
 };
 
-out vec4 FragColor;
-
 uniform sampler2D _MainTex;
 uniform sampler2D _NormalMap;
 uniform vec3 _EyePos;
@@ -26,9 +27,11 @@ uniform Material _Material;
 
 //Light source
 uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
-uniform vec3 _LightCol = vec3(1.0, 1.0, 1.0);
+uniform vec3 _LightCol = vec3(300.0, 300.0, 300.0);
 uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 uniform bool _Use_NormalMap;
+
+const float brightnessThreshold = 1.0f;
 
 void main() 
 {
@@ -66,5 +69,16 @@ void main()
 	//Calculate final light color
 	//FragColor = vec4(normal * 0.5 + 0.5, 1.0);
 	vec3 objectColor = texture(_MainTex, fs_surface.texcoord).rgb;
-	FragColor = vec4(objectColor * lightColor, 1.0);
+	fragColor = vec4(objectColor * lightColor, 1.0);
+
+	//Check brightness
+	float brightness = dot(fragColor.rgb, vec3(0.2126, 0.7151, 0.0722));
+	if (brightness > brightnessThreshold)
+	{
+		fragBright = fragColor;
+	}
+	else 
+	{
+		fragBright = vec4(vec3(0.0), 1.0);
+	}
 }

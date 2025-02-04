@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <ew/external/glad.h>
-
-#include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -36,7 +33,8 @@ enum PostProcessShaders
 	GRAYSCALE,
 	INVERSE,
 	EDGE_DETECTION,
-	BLURR
+	BLURR,
+	GAUSSEN_BLUR
 };
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
@@ -83,7 +81,9 @@ Material mats[3] = {
 short matIndex = 0;
 Material* currMat = &mats[matIndex];
 bool usingNormalMap = true;
-tsa::Framebuffer framebuffer = tsa::createFrameBuffer();
+tsa::Framebuffer framebuffer;
+tsa::Framebuffer pingPongBuffers[2];
+int pingPongIndex = 0;
 PostProcessShaders currPPShader = FOG;
 std::unordered_map<PostProcessShaders, tsa::PPShaderData*> ppShaderMap;
 
@@ -118,17 +118,14 @@ void render(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, 
 	glDepthFunc(GL_LESS);
 
 	//GFX Pass
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, normalMap);
-
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, zaToon);
 
 	shader.use();
 	modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
@@ -197,6 +194,11 @@ int main() {
 	blurrShader->displayName = "Blurr Effect";
 	ppShaderMap[BLURR] = blurrShader;
 
+	tsa::GaussenBlurrData* gaussenShader = new tsa::GaussenBlurrData();
+	gaussenShader->shaderProgram = ew::Shader("assets/gaussenBlur.vert", "assets/gaussenBlur.frag");
+	gaussenShader->displayName = "Gaussen Blurr Effect";
+	ppShaderMap[GAUSSEN_BLUR] = gaussenShader;
+
 	tsa::GrayScaleData* grayScaleShader = new tsa::GrayScaleData();
 	grayScaleShader->shaderProgram = ew::Shader("assets/grayScale.vert", "assets/grayScale.frag");
 	grayScaleShader->displayName = "Grayscale Effect";
@@ -207,49 +209,28 @@ int main() {
 	inverseShader->displayName = "Inverse Effect";
 	ppShaderMap[INVERSE] = inverseShader;
 
-	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
-	ew::Shader lit_Shader = ew::Shader("assets/toon.vert", "assets/toon.frag");
+	ew::Shader hdrShader = ew::Shader("assets/hdr.vert", "assets/hdr.frag");
 
-	ew::Model suzanne = ew::Model("assets/skull.obj");
+	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
+	ew::Shader lit_Shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+
+	ew::Model suzanne = ew::Model("assets/Suzanne.fbx");
 	suzanneTransform.scale = glm::vec3(0.1f);
 
 	GLint Rock_Color = ew::loadTexture("assets/Txo_dokuo.png");
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 	GLint zaToon = ew::loadTexture("assets/ZAtoon.png");
 
-	//Bind framebuffer
-	glGenFramebuffers(1, &framebuffer.fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+	framebuffer = tsa::createHDRFrameBuffer();
+	pingPongBuffers[0] = tsa::createHDRFrameBuffer();
+	pingPongBuffers[1] = tsa::createHDRFrameBuffer();
 
-	//Create color texture attachment
-	glGenTextures(1, &framebuffer.color0);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	//Bind color attachment
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer.color0, 0);
-
-	//Create depth texture attachment
-	glGenTextures(1, &framebuffer.depthColor);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.depthColor);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	//Bind depth texture attachment
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, framebuffer.depthColor, 0);
-
-	//Generate and bind rbo
-	/*glGenRenderbuffers(1, &framebuffer.depthColor);
-	glBindRenderbuffer(GL_RENDERBUFFER, framebuffer.depthColor);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, framebuffer.depthColor);*/
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//Check if frame buffer was created
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		printf("Failed to bind framebuffer");
+		return 0;
+	}
 
 	//Initialize fullscreen quad
 	glGenVertexArrays(1, &fullscreenQuad.vao);
@@ -269,13 +250,6 @@ int main() {
 
 	glBindVertexArray(0);
 
-	//Check if frame buffer was created
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-	{
-		printf("Failed to bind framebuffer");
-		return 0;
-	}
-
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -293,6 +267,49 @@ int main() {
 		glDisable(GL_DEPTH_TEST);
 
 		glBindVertexArray(fullscreenQuad.vao);
+
+		pingPongBuffers[1].color0 = framebuffer.brightness;
+
+		pingPongIndex = 0;
+		for (int i = 0; i < 1; i++)
+		{
+			if (pingPongIndex % 2 == 0)
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[0].fbo);
+
+				ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
+
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, pingPongBuffers[1].color0);
+
+				gBlurrShader.use();
+				gBlurrShader.setInt("_MainTex", 0);
+
+				glDrawArrays(GL_TRIANGLES, 0, 6);
+
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+			else 
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[1].fbo);
+
+				ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
+
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, pingPongBuffers[0].color0);
+
+				gBlurrShader.use();
+				gBlurrShader.setInt("_MainTex", 0);
+
+				glDrawArrays(GL_TRIANGLES, 0, 6);
+
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
+
+			pingPongIndex++;
+		}
+
+		framebuffer.color0 = pingPongBuffers[pingPongIndex % 2 == 0].color0;
 
 		ppShaderMap[currPPShader]->display(framebuffer);
 
@@ -364,6 +381,7 @@ void drawUI() {
 	ImGui::Text("pointer = %x", framebuffer.color0);
 	ImGui::Text("size = %d x %d", 800, 600);
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color0, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.brightness, ImVec2(800, 600));
 	ImGui::End();
 
 	ImGui::End();
