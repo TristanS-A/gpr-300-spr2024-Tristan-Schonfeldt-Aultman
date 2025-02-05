@@ -26,9 +26,9 @@ uniform vec3 _EyePos;
 uniform Material _Material;
 
 //Light source
-uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
-uniform vec3 _LightCol = vec3(1.0, 1.0, 200.0);
-uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
+uniform vec3 _LightDir;
+uniform vec3 _LightCol;
+uniform vec3 _AmbientColor;
 uniform bool _Use_NormalMap;
 
 const float brightnessThreshold = 1.0f;

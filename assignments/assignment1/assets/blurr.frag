@@ -5,9 +5,9 @@ out vec4 FragColor;
 in vec2 vs_textcoords;
 
 uniform sampler2D _MainTex;
-uniform float _InvStrrength;
+uniform float _InvStrength;
 
-const float offset = 1.0 / _InvStrrength;
+const float offset = 1.0 / _InvStrength;
 const vec2 offsets[9] = vec2[]
 (
 	vec2(-offset, offset), //Top-left

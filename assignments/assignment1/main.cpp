@@ -83,11 +83,17 @@ Material mats[3] = {
 short matIndex = 0;
 Material* currMat = &mats[matIndex];
 bool usingNormalMap = true;
-tsa::Framebuffer framebuffer;
+tsa::Framebuffer bloomFramebuffer;
+tsa::Framebuffer hdrFramebuffer;
+tsa::Framebuffer nonHDRFramebuffer;
 tsa::Framebuffer pingPongBuffers[2];
 int pingPongIndex = 0;
 PostProcessShaders currPPShader = FOG;
 std::unordered_map<PostProcessShaders, tsa::PPShaderData*> ppShaderMap;
+tsa::BloomData bloomShaderData;
+glm::vec3 lightColor = glm::vec3(1.0, 1.0, 1.0);
+glm::vec3 ambientLightColor = glm::vec3(0.3, 0.4, 0.46);
+glm::vec3 lightDir = glm::vec3(0.0, 1.0, 0.0);
 
 static int palette_index = 0;
 std::vector<std::tuple<std::string, ToonShading::Palette>> palette = {
@@ -108,7 +114,7 @@ static float quadVertecies[] = {
 	1.0f,  1.0f, 1.0f, 1.0f,
 };
 
-void render(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, GLint zaToon, const float dt)
+void render(ew::Shader shader, tsa::Framebuffer framebuffer, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, GLint zaToon, const float dt)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
@@ -135,11 +141,12 @@ void render(ew::Shader shader, ew::Model& model, ew::Transform& modelTransform, 
 	shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 	shader.setInt("_MainTex", 0);
 	shader.setInt("_NormalMap", 1);
-	shader.setInt("_ZaToon", 2);
 	shader.setBool("_Use_NormalMap", usingNormalMap);
 	shader.setVec3("_EyePos", camera.position);
-	shader.setVec3("_Highlight", std::get<1>(palette[palette_index]).highlight);
-	shader.setVec3("_Shadow", std::get<1>(palette[palette_index]).shadow);
+	shader.setVec3("_LightCol", lightColor);
+	shader.setVec3("_AmbientColor", ambientLightColor);
+	shader.setVec3("_AmbientColor", ambientLightColor);
+	shader.setVec3("_LightDir", lightDir);
 
 	shader.setFloat("_Material.ambientK", currMat->ambientK);
 	shader.setFloat("_Material.diffuseK", currMat->diffuseK);
@@ -211,30 +218,35 @@ int main() {
 	inverseShader->displayName = "Inverse Effect";
 	ppShaderMap[INVERSE] = inverseShader;
 
-	tsa::PPShaderData* hdrShader = new tsa::PPShaderData();
+	tsa::HDRData* hdrShader = new tsa::HDRData();
 	hdrShader->shaderProgram = ew::Shader("assets/hdr.vert", "assets/hdr.frag");
 	hdrShader->displayName = "HDR Effect";
 	ppShaderMap[HDR] = hdrShader;
 
 	tsa::PPShaderData* bloomShader = new tsa::PPShaderData();
-	bloomShader->shaderProgram = ew::Shader("assets/bloom.vert", "assets/bloom.frag");
 	bloomShader->displayName = "Bloom Effect";
 	ppShaderMap[BLOOM] = bloomShader;
+
+	bloomShaderData = tsa::BloomData();
+	bloomShaderData.shaderProgram = ew::Shader("assets/bloom.vert", "assets/bloom.frag");
 
 	ew::Shader fullShader = ew::Shader("assets/fullscreen.vert", "assets/fullscreen.frag");
 	//ew::Shader lit_Shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader lit_Shader = ew::Shader("assets/bloomLit.vert", "assets/bloomLit.frag");
 
 	ew::Model suzanne = ew::Model("assets/Suzanne.fbx");
-	suzanneTransform.scale = glm::vec3(0.1f);
+	suzanneTransform.scale = glm::vec3(1.0f);
 
-	GLint Rock_Color = ew::loadTexture("assets/Txo_dokuo.png");
+	GLint Rock_Color = ew::loadTexture("assets/medow.jpeg");
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 	GLint zaToon = ew::loadTexture("assets/ZAtoon.png");
 
-	framebuffer = tsa::createBloomHDRFrameBuffer();
+	bloomFramebuffer = tsa::createBloomHDRFrameBuffer();
+	hdrFramebuffer = tsa::createHDRFrameBuffer();
+	nonHDRFramebuffer = tsa::createFrameBuffer();
 	pingPongBuffers[0] = tsa::createFrameBuffer();
 	pingPongBuffers[1] = tsa::createFrameBuffer();
+	glEnable(GL_FRAMEBUFFER_SRGB);
 
 	//Check if frame buffer was created
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -271,60 +283,76 @@ int main() {
 		//RENDER
 		camController.move(window, &camera, deltaTime);
 
-		render(lit_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
-
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glDisable(GL_DEPTH_TEST);
-
-		glBindVertexArray(fullscreenQuad.vao);
-		glViewport(0, 0, 800, 600);
-
-		bool horizontal = true, first_iteration = true;
-		int amount = 10;
-		ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
-		gBlurrShader.use();
-		for (unsigned int i = 0; i < amount; i++)
+		if (currPPShader == BLOOM)
 		{
-			glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[horizontal].fbo);
+			render(lit_Shader, bloomFramebuffer, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
+
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDisable(GL_DEPTH_TEST);
+
+			glBindVertexArray(fullscreenQuad.vao);
+
+			bool horizontal = true, first_iteration = true;
+			ew::Shader gBlurrShader = ppShaderMap[GAUSSEN_BLUR]->shaderProgram;
+			gBlurrShader.use();
+			for (unsigned int i = 0; i < bloomShaderData.blurrCycles; i++)
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, pingPongBuffers[horizontal].fbo);
+				glEnable(GL_FRAMEBUFFER_SRGB);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(
+					GL_TEXTURE_2D, first_iteration ? bloomFramebuffer.brightness : pingPongBuffers[!horizontal].color0
+				);
+				gBlurrShader.setInt("_MainTex", 0);
+				gBlurrShader.setFloat("_InvStrength", bloomShaderData.blurrInvStrength);
+				glDrawArrays(GL_TRIANGLES, 0, 6);
+				horizontal = !horizontal;
+				if (first_iteration)
+					first_iteration = false;
+			}
+
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			ew::Shader bloomShader = bloomShaderData.shaderProgram;
+			bloomShader.use();
+
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(
-				GL_TEXTURE_2D, first_iteration ? framebuffer.brightness : pingPongBuffers[!horizontal].color0
-			);
-			gBlurrShader.setInt("_MainTex", 0);
-			gBlurrShader.setFloat("_InvStrrength", 300);
-			glDrawArrays(GL_TRIANGLES, 0, 6);
-			horizontal = !horizontal;
-			if (first_iteration)
-				first_iteration = false;
+			glBindTexture(GL_TEXTURE_2D, bloomFramebuffer.color0);
+			bloomShader.setInt("_SceneColor", 0);
+
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, pingPongBuffers[!horizontal].color0);
+			bloomShader.setInt("_BloomBlurr", 1);
+
+			bloomShaderData.loadAdditionalImGui();
 		}
+		else if (currPPShader == HDR)
+		{
+			render(lit_Shader, hdrFramebuffer, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDisable(GL_DEPTH_TEST);
 
-		ew::Shader bloomShader = ppShaderMap[BLOOM]->shaderProgram;
-		bloomShader.use();
+			glBindVertexArray(fullscreenQuad.vao);
 
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
-		bloomShader.setInt("_SceneColor", 0);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, pingPongBuffers[!horizontal].color0);
-		bloomShader.setInt("_BloomBlurr", 1);
+			ppShaderMap[HDR]->display(hdrFramebuffer);
+		}
+		else 
+		{
+			render(lit_Shader, nonHDRFramebuffer, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
 
-		//ppShaderMap[currPPShader]->display(framebuffer);
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDisable(GL_DEPTH_TEST);
 
+			glBindVertexArray(fullscreenQuad.vao);
 
-		////HDR
-		/*glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		ew::Shader hdrShader = ppShaderMap[HDR]->shaderProgram;
-		hdrShader.use();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(
-			GL_TEXTURE_2D, framebuffer.color0
-		);
-		hdrShader.setInt("_MainTex", 0);*/
+			ppShaderMap[currPPShader]->display(nonHDRFramebuffer);
+		}
 
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -364,37 +392,50 @@ void drawUI() {
 
 	if (ImGui::CollapsingHeader("Edit Post Process Effect"))
 	{
-		ppShaderMap[currPPShader]->ImGuiDisplay();
+		if (currPPShader != BLOOM)
+		{
+			ppShaderMap[currPPShader]->ImGuiDisplay();
+		}
+		else 
+		{
+			bloomShaderData.ImGuiDisplay();
+		}
 	}
 
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
 	ImGui::Checkbox("Using Normal Map", &usingNormalMap);
 
-	if (ImGui::BeginCombo("Palette", std::get<std::string>(palette[palette_index]).c_str()))
+	if (ImGui::CollapsingHeader("Light Settings"))
 	{
-		for (auto n = 0; n < palette.size(); ++n)
-		{
-			auto is_selected = (std::get<0>(palette[palette_index]) == std::get<0>(palette[n]));
-			if (ImGui::Selectable(std::get<std::string>(palette[n]).c_str(), is_selected))
-			{
-				palette_index = n;
-			}
-			if (is_selected)
-			{
-				ImGui::SetItemDefaultFocus();
-			}
-		}
-		ImGui::EndCombo();
+		ImGui::DragFloat("Light Red", &lightColor.r, 0.1f, 0.0f, 150.0f);
+		ImGui::DragFloat("Light Green", &lightColor.g, 0.1f, 0.0f, 150.0f);
+		ImGui::DragFloat("Light Blue", &lightColor.b, 0.1f, 0.0f, 150.0f);
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+		ImGui::DragFloat("Ambient Light Red", &ambientLightColor.r, 0.1f, 0.0f, 150.0f);
+		ImGui::DragFloat("Ambient Light Green", &ambientLightColor.g, 0.1f, 0.0f, 150.0f);
+		ImGui::DragFloat("Ambient Light Blue", &ambientLightColor.b, 0.1f, 0.0f, 150.0f);
+		ImGui::DragFloat("Light Direction X", &lightDir.x, 0.01f, -1.0f, 1.0f);
+		ImGui::DragFloat("Light Direction Y", &lightDir.y, 0.01f, -1.0f, 1.0f);
+		ImGui::DragFloat("Light Direction Z", &lightDir.z, 0.01f, -1.0f, 1.0f);
 	}
-	ImGui::ColorEdit3("Highlight", &std::get<ToonShading::Palette>(palette[palette_index]).highlight[0]);
-	ImGui::ColorEdit3("Shadow", &std::get<ToonShading::Palette>(palette[palette_index]).shadow[0]);
 
 	ImGui::Begin("OpenGL Texture Text");
-	ImGui::Text("pointer = %x", framebuffer.color0);
+	ImGui::Text("pointer = %x");
 	ImGui::Text("size = %d x %d", 800, 600);
-	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color0, ImVec2(800, 600));
-	ImGui::Image((ImTextureID)(intptr_t)framebuffer.brightness, ImVec2(800, 600));
+	if (currPPShader == BLOOM) 
+	{
+		ImGui::Image((ImTextureID)(intptr_t)bloomFramebuffer.color0, ImVec2(800, 600));
+		ImGui::Image((ImTextureID)(intptr_t)bloomFramebuffer.brightness, ImVec2(800, 600));
+	}
+	else if (currPPShader == HDR)
+	{
+		ImGui::Image((ImTextureID)(intptr_t)hdrFramebuffer.color0, ImVec2(800, 600));
+	}
+	else
+	{
+		ImGui::Image((ImTextureID)(intptr_t)nonHDRFramebuffer.color0, ImVec2(800, 600));
+	}
 	ImGui::End();
 
 	ImGui::End();

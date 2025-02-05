@@ -104,7 +104,7 @@ namespace tsa
 		void display(Framebuffer framebuffer) override
 		{
 			PPShaderData::display(framebuffer);
-			shaderProgram.setFloat("_InvStrrength", strength);
+			shaderProgram.setFloat("_InvStrength", strength);
 		}
 
 		void ImGuiDisplay() override
@@ -123,7 +123,7 @@ namespace tsa
 		void display(Framebuffer framebuffer) override
 		{
 			PPShaderData::display(framebuffer);
-			shaderProgram.setFloat("_InvStrrength", strength);
+			shaderProgram.setFloat("_InvStrength", strength);
 		}
 
 		void ImGuiDisplay() override
@@ -180,6 +180,54 @@ namespace tsa
 		{
 
 			ImGui::SliderFloat("Inverse Amount", &invAmount, 0.0f, 1.0f);
+		}
+	};
+
+	struct HDRData : PPShaderData
+	{
+		float gammma = 2.2;
+		float exposure = 1.0;
+
+		HDRData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			shaderProgram.setFloat("_Gamma", gammma);
+			shaderProgram.setFloat("_Exposure", exposure);
+
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::SliderFloat("Gamma", &gammma, 0.0f, 10.0f);
+			ImGui::SliderFloat("EXposure", &exposure, 0.0f, 20.0f);
+		}
+	};
+
+	struct BloomData
+	{
+		float gammma = 2.2;
+		float exposure = 4.0;
+		int blurrCycles = 10;
+		int blurrInvStrength = 300;
+
+		ew::Shader shaderProgram;
+
+		void loadAdditionalImGui()
+		{
+			shaderProgram.setFloat("_Gamma", gammma);
+			shaderProgram.setFloat("_Exposure", exposure);
+		}
+
+		void ImGuiDisplay()
+		{
+			ImGui::SliderFloat("Gamma", &gammma, 0.0f, 10.0f);
+			ImGui::SliderFloat("Exposure", &exposure, 0.0f, 20.0f);
+			ImGui::SliderInt("Blurr Cycles", &blurrCycles, 1, 100);
+			ImGui::SliderInt("Blurr Inverse Strength", &blurrInvStrength, 1, 1000);
 		}
 	};
 }
