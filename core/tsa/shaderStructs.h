@@ -183,6 +183,83 @@ namespace tsa
 		}
 	};
 
+	struct VignetteData : PPShaderData
+	{
+		float radius = 0.3;
+		float smooth = 0.2;
+
+		VignetteData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			shaderProgram.setFloat("_Radius", radius);
+			shaderProgram.setFloat("_Smooth", smooth);
+
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::SliderFloat("Radius", &radius, 0.0f, 1.0f);
+			ImGui::SliderFloat("Cuttoff Smoothing", &smooth, 0.0f, 1.0f);
+		}
+	};
+
+	struct CRTShader : PPShaderData
+	{
+		float time = 0.0;
+		float scrollSpeed = 0.2;
+		float scanLineHeight = 0.015;
+		float scanlineIntensity = 0.01;
+		float grainIntensity = 0.2;
+		float affectIntensity = 0.2f;
+
+		CRTShader() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			time = glfwGetTime();
+			shaderProgram.setFloat("_Time", time);
+			shaderProgram.setFloat("_ScrollSpeed", scrollSpeed);
+			shaderProgram.setFloat("_ScanlineHeight", scanLineHeight);
+			shaderProgram.setFloat("_ScanlineIntensity", scanlineIntensity);
+			shaderProgram.setFloat("_GrainIntensity", grainIntensity);
+			shaderProgram.setFloat("_AffectIntensity", affectIntensity);
+
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::SliderFloat("Scroll Speed", &scrollSpeed, 0.0f, 10.0f);
+			ImGui::SliderFloat("Scanline Height", &scanLineHeight, 0.0f, 1.0f);
+			ImGui::SliderFloat("Scanline Intensity", &scanlineIntensity, 0.0f, 1.0f);
+			ImGui::SliderFloat("Grain Intensity", &grainIntensity, 0.0f, 1.0f);
+			ImGui::SliderFloat("Affect Intensity", &affectIntensity, 0.0f, 1.0f);
+		}
+	};
+
+	struct PSXData : PPShaderData
+	{
+		glm::vec2 psxRes = glm::vec2(640, 480);
+		glm::vec2 newRes = glm::vec2(1080, 720);
+		float scrollSpeed = 0.2;
+
+		PSXData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			shaderProgram.setVec2("_PSXResolution", psxRes);
+			shaderProgram.setVec2("_NewResolution", newRes);
+		}
+	};
+
 	struct HDRData : PPShaderData
 	{
 		float gammma = 2.2;

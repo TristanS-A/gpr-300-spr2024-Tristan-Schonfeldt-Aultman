@@ -13,7 +13,7 @@ namespace tsa
 		GLuint depthColor;
 	};
 
-	Framebuffer createFrameBuffer();
-	Framebuffer createHDRFrameBuffer();
-	Framebuffer createBloomHDRFrameBuffer();
+	Framebuffer createFrameBuffer(float width, float height, GLuint colorFiltering);
+	Framebuffer createHDRFrameBuffer(float width, float height);
+	Framebuffer createBloomHDRFrameBuffer(float width, float height);
 }

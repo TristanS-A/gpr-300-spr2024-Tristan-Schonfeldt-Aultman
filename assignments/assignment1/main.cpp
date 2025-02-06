@@ -35,6 +35,9 @@ enum PostProcessShaders
 	EDGE_DETECTION,
 	BLURR,
 	GAUSSEN_BLUR,
+	VIGNETTE,
+	CRT,
+	PSX,
 	HDR,
 	BLOOM
 };
@@ -44,8 +47,8 @@ GLFWwindow* initWindow(const char* title, int width, int height);
 void drawUI();
 
 //Global state
-int screenWidth = 800;
-int screenHeight = 600;
+int screenWidth = 1080;
+int screenHeight = 720;
 float prevFrameTime;
 float deltaTime;
 
@@ -86,6 +89,7 @@ bool usingNormalMap = true;
 tsa::Framebuffer bloomFramebuffer;
 tsa::Framebuffer hdrFramebuffer;
 tsa::Framebuffer nonHDRFramebuffer;
+tsa::Framebuffer ps1Framebuffer;
 tsa::Framebuffer pingPongBuffers[2];
 int pingPongIndex = 0;
 PostProcessShaders currPPShader = FOG;
@@ -218,6 +222,21 @@ int main() {
 	inverseShader->displayName = "Inverse Effect";
 	ppShaderMap[INVERSE] = inverseShader;
 
+	tsa::VignetteData* vignetteShader = new tsa::VignetteData();
+	vignetteShader->shaderProgram = ew::Shader("assets/vignette.vert", "assets/vignette.frag");
+	vignetteShader->displayName = "Vignette Effect";
+	ppShaderMap[VIGNETTE] = vignetteShader;
+
+	tsa::CRTShader* crtShader = new tsa::CRTShader();
+	crtShader->shaderProgram = ew::Shader("assets/crt.vert", "assets/crt.frag");
+	crtShader->displayName = "CRT Effect";
+	ppShaderMap[CRT] = crtShader;
+
+	tsa::PSXData* psxShader = new tsa::PSXData();
+	psxShader->shaderProgram = ew::Shader("assets/psx.vert", "assets/psx.frag");
+	psxShader->displayName = "PSX Effect";
+	ppShaderMap[PSX] = psxShader;
+
 	tsa::HDRData* hdrShader = new tsa::HDRData();
 	hdrShader->shaderProgram = ew::Shader("assets/hdr.vert", "assets/hdr.frag");
 	hdrShader->displayName = "HDR Effect";
@@ -241,11 +260,12 @@ int main() {
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 	GLint zaToon = ew::loadTexture("assets/ZAtoon.png");
 
-	bloomFramebuffer = tsa::createBloomHDRFrameBuffer();
-	hdrFramebuffer = tsa::createHDRFrameBuffer();
-	nonHDRFramebuffer = tsa::createFrameBuffer();
-	pingPongBuffers[0] = tsa::createFrameBuffer();
-	pingPongBuffers[1] = tsa::createFrameBuffer();
+	bloomFramebuffer = tsa::createBloomHDRFrameBuffer(screenWidth, screenHeight);
+	hdrFramebuffer = tsa::createHDRFrameBuffer(screenWidth, screenHeight);
+	nonHDRFramebuffer = tsa::createFrameBuffer(screenWidth, screenHeight, GL_LINEAR);
+	ps1Framebuffer = tsa::createFrameBuffer(640, 480, GL_NEAREST);
+	pingPongBuffers[0] = tsa::createFrameBuffer(screenWidth, screenHeight, GL_LINEAR);
+	pingPongBuffers[1] = tsa::createFrameBuffer(screenWidth, screenHeight, GL_LINEAR);
 	glEnable(GL_FRAMEBUFFER_SRGB);
 
 	//Check if frame buffer was created
@@ -340,6 +360,18 @@ int main() {
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 			ppShaderMap[HDR]->display(hdrFramebuffer);
+		}
+		else if (currPPShader == PSX)
+		{
+			render(lit_Shader, ps1Framebuffer, suzanne, suzanneTransform, Rock_Color, rockNormal, zaToon, deltaTime);
+
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDisable(GL_DEPTH_TEST);
+
+			glBindVertexArray(fullscreenQuad.vao);
+
+			ppShaderMap[currPPShader]->display(ps1Framebuffer);
 		}
 		else 
 		{

@@ -2,7 +2,7 @@
 
 namespace tsa
 {
-	Framebuffer createFrameBuffer()
+	Framebuffer createFrameBuffer(float width, float height, GLuint colorFiltering)
 	{
 		Framebuffer frameBuffer;
 		
@@ -13,9 +13,9 @@ namespace tsa
 		//Create color texture attachment
 		glGenTextures(1, &frameBuffer.color0);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.color0);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, colorFiltering);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, colorFiltering);
 
 		//Bind color attachment
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, frameBuffer.color0, 0);
@@ -23,7 +23,7 @@ namespace tsa
 		//Create depth texture attachment
 		glGenTextures(1, &frameBuffer.depthColor);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.depthColor);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -42,8 +42,8 @@ namespace tsa
 
 		return frameBuffer;
 	}
-
-	Framebuffer createHDRFrameBuffer()
+	
+	Framebuffer createHDRFrameBuffer(float width, float height)
 	{
 		Framebuffer frameBuffer;
 
@@ -54,7 +54,7 @@ namespace tsa
 		//Create color texture attachment
 		glGenTextures(1, &frameBuffer.color0);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.color0);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 800, 600, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -66,7 +66,7 @@ namespace tsa
 		//Create depth texture attachment
 		glGenTextures(1, &frameBuffer.depthColor);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.depthColor);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -78,7 +78,7 @@ namespace tsa
 		return frameBuffer;
 	}
 
-	Framebuffer createBloomHDRFrameBuffer()
+	Framebuffer createBloomHDRFrameBuffer(float width, float height)
 	{
 		Framebuffer frameBuffer;
 
@@ -89,7 +89,7 @@ namespace tsa
 		//Create color texture attachment
 		glGenTextures(1, &frameBuffer.color0);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.color0);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 800, 600, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -98,7 +98,7 @@ namespace tsa
 		//Create brightness texture attachment
 		glGenTextures(1, &frameBuffer.brightness);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.brightness);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 800, 600, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -116,7 +116,7 @@ namespace tsa
 		//Create depth texture attachment
 		glGenTextures(1, &frameBuffer.depthColor);
 		glBindTexture(GL_TEXTURE_2D, frameBuffer.depthColor);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, 800, 600, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
