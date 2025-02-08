@@ -260,6 +260,33 @@ namespace tsa
 		}
 	};
 
+	struct DistortionData : PPShaderData
+	{
+		float time = 0.0;
+		float speed = 0.9f;
+		float strength = 1.0f;
+
+		DistortionData() : PPShaderData() {};
+
+		void display(Framebuffer framebuffer) override
+		{
+			PPShaderData::display(framebuffer);
+
+			time = glfwGetTime();
+			shaderProgram.setFloat("_Time", time);
+			shaderProgram.setFloat("_Speed", speed);
+			shaderProgram.setFloat("_Strength", strength);
+
+		}
+
+		void ImGuiDisplay() override
+		{
+
+			ImGui::SliderFloat("Distortion Speed", &speed, 0.0f, 20.0f);
+			ImGui::SliderFloat("Distortion Strength", &strength, 0.0f, 20.0f);
+		}
+	};
+
 	struct HDRData : PPShaderData
 	{
 		float gammma = 2.2;

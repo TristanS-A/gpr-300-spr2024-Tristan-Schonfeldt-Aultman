@@ -38,6 +38,7 @@ enum PostProcessShaders
 	VIGNETTE,
 	CRT,
 	PSX,
+	DISTORTION,
 	HDR,
 	BLOOM
 };
@@ -184,6 +185,7 @@ int main() {
 	camera.fov = 60.0f;
 	camController.sprintMoveSpeed = 20;
 
+	//Post process shader set up
 	tsa::FogShaderData* fogShader = new tsa::FogShaderData();
 	fogShader->shaderProgram = ew::Shader("assets/fog.vert", "assets/fog.frag");
 	fogShader->farPlane = camera.farPlane;
@@ -236,6 +238,11 @@ int main() {
 	psxShader->shaderProgram = ew::Shader("assets/psx.vert", "assets/psx.frag");
 	psxShader->displayName = "PSX Effect";
 	ppShaderMap[PSX] = psxShader;
+
+	tsa::DistortionData* distortionShader = new tsa::DistortionData();
+	distortionShader->shaderProgram = ew::Shader("assets/distortion.vert", "assets/distortion.frag");
+	distortionShader->displayName = "Distortion Effect";
+	ppShaderMap[DISTORTION] = distortionShader;
 
 	tsa::HDRData* hdrShader = new tsa::HDRData();
 	hdrShader->shaderProgram = ew::Shader("assets/hdr.vert", "assets/hdr.frag");
