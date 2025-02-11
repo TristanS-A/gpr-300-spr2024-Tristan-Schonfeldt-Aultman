@@ -1,0 +1,26 @@
+static int palette_index = 0;
+static std::vector<std::tuple<std::string, ToonShading::Palette>> palette{
+    {"Sunny Day", {.highlight = {1.00f, 1.00f, 1.00f}, .shadow = {0.60f, 0.54f, 0.52f}}},
+    {"Bright Night", {.highlight = {0.47f, 0.58f, 0.68f}, .shadow = {0.32f, 0.39f, 0.57f}}},
+    {"Rainy Day", {.highlight = {0.62f, 0.69f, 0.67f}, .shadow = {0.50f, 0.55f, 0.50f}}},
+    {"Rainy Night", {.highlight = {0.24f, 0.36f, 0.54f}, .shadow = {0.25f, 0.31f, 0.31f}}},
+};
+
+if (ImGui::BeginCombo("Palette", std::get<std::string>(palette[palette_index]).c_str()))
+{
+    for (auto n = 0; n < palette.size(); ++n)
+    {
+        auto is_selected = (std::get<0>(palette[palette_index]) == std::get<0>(palette[n]));
+        if (ImGui::Selectable(std::get<std::string>(palette[n]).c_str(), is_selected))
+        {
+            palette_index = n;
+        }
+        if (is_selected)
+        {
+            ImGui::SetItemDefaultFocus();
+        }
+    }
+    ImGui::EndCombo();
+}
+ImGui::ColorEdit3("Highlight", &std::get<ToonShading::Palette>(palette[palette_index]).highlight[0]);
+ImGui::ColorEdit3("Shadow", &std::get<ToonShading::Palette>(palette[palette_index]).shadow[0]);
