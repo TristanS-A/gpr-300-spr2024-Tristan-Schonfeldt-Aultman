@@ -17,14 +17,13 @@ out Surface
 } vs_surface;
 
 uniform mat4 camera_viewProj;
-uniform mat4 light_viewProj;
+uniform mat4 _LightViewProj;
 uniform mat4 _Model;
 
 void main()
 {
-	vec4 worldPos = _Model * vec4(v_In_Pos, 1.0);
-	vs_surface.worldPos = vec3(worldPos);
-	vs_surface.lightPos = light_viewProj * worldPos;
+	vs_surface.worldPos = vec3(_Model * vec4(v_In_Pos, 1.0));
+	vs_surface.lightPos = _LightViewProj * vec4(vs_surface.worldPos, 1.0);
 	vs_surface.worldNormal = transpose(inverse(mat3(_Model))) * v_In_Normal;
 
 	vs_surface.texcoord = in_texcoord;

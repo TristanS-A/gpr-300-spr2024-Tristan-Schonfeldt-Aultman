@@ -105,6 +105,11 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 	glCullFace(GL_BACK);  //MAKE THIS IMGUI TOGGLE ABLE FOR SELF SHADOW ISSUES (CULL FRONT). ALSO DO PCF
 	glEnable(GL_DEPTH_TEST);
 
+	//Light's view of the scene
+	const auto lightProj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f);
+	const auto lightView = glm::lookAt(lightVec, glm::vec3(0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+	const auto lightViewProj = lightProj * lightView;
+
 	//Shadow pass
 	glBindFramebuffer(GL_FRAMEBUFFER, depthBuffer.fbo);
 	{
@@ -113,11 +118,6 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 
 		//GFX Pass
 		glClear(GL_DEPTH_BUFFER_BIT);
-
-		//Light's view of the scene
-		const auto lightProj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f);
-		const auto lightView = glm::lookAt(lightVec, glm::vec3(0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
-		const auto lightViewProj = lightProj * lightView;
 
 		shadowShader.use();
 		shadowShader.setMat4("_Model", modelTransform.modelMatrix());
@@ -152,11 +152,11 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		shader.setInt("_MainTex", 0);
 		shader.setInt("_NormalMap", 1);
 		shader.setInt("_ShadowMap", 2);
-		shader.setBool("_Use_NormalMap", usingNormalMap);
 
 		shader.setVec3("_CamPos", camera.position);
 		shader.setVec3("_Light.color", glm::vec3(1.0f, 0.0f, 1.0f));
 		shader.setVec3("_Light.pos", glm::vec3(lightVec));
+		shader.setMat4("_LightViewProj", lightViewProj);
 
 		shader.setFloat("_Material.ambientK", currMat->ambientK);
 		shader.setFloat("_Material.diffuseK", currMat->diffuseK);

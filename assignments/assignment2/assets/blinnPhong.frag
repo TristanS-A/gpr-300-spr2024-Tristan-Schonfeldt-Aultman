@@ -34,10 +34,9 @@ uniform Material _Material;
 uniform Light _Light;
 
 //Light source
-uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
-uniform vec3 _CamPos = vec3(1.0, 1.0, 1.0);
-uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
-uniform bool _Use_NormalMap;
+//uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
+uniform vec3 _CamPos;
+//uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 
 float shadowCalculations(vec4 fragPosLightSpace)
 {
@@ -85,9 +84,9 @@ void main()
 	float shadow = shadowCalculations(fs_surface.lightPos);
 	
 	vec3 lighting = blinnPhong(normal, fs_surface.worldPos);
-	lighting *= (1.0 - shadow);
-	lighting *= _Light.color * _AmbientColor * _Material.ambientK;
 
 	vec3 objectColor = texture(_MainTex, fs_surface.texcoord).rgb;
-	FragColor = vec4(objectColor * lighting, 1.0);
+
+	vec3 finalLighting = _Light.color * ((_Material.ambientK + (1.0 - shadow) * lighting) * objectColor);
+	FragColor = vec4(finalLighting, 1.0);
 }
