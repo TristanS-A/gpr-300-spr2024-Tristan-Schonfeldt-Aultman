@@ -27,6 +27,8 @@ void drawUI();
 //Global state
 int screenWidth = 1080;
 int screenHeight = 720;
+int shadowScreenWidth = 1080;
+int shadowScreenHeight = 1080;
 float prevFrameTime;
 float deltaTime;
 
@@ -60,7 +62,7 @@ struct DepthBuffer
 		glGenTextures(1, &depth);
 		glBindTexture(GL_TEXTURE_2D, depth);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
-			256, 256, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+			shadowScreenWidth, shadowScreenHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -82,6 +84,11 @@ struct DepthBuffer
 	}
 } depthBuffer;
 
+struct ShadowDebug
+{
+	float bias = 0.0;
+} shadowDebug;
+
 //Caching things
 ew::Camera camera;
 ew::CameraController camController;
@@ -94,6 +101,7 @@ Material mats[3] = {
 short matIndex = 0;
 Material* currMat = &mats[matIndex];
 bool usingNormalMap = true;
+bool paused = false;
 
 ew::Mesh plane;
 glm::vec3 lightVec = { 2.0f, 2.0f, -2.0f };
@@ -102,8 +110,9 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 {
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);  //MAKE THIS IMGUI TOGGLE ABLE FOR SELF SHADOW ISSUES (CULL FRONT). ALSO DO PCF
 	glEnable(GL_DEPTH_TEST);
+	glCullFace(GL_BACK);
+	//glCullFace(GL_FRONT); //MAKE THIS IMGUI TOGGLE ABLE FOR SELF SHADOW ISSUES (CULL FRONT). ALSO DO PCF
 
 	//Light's view of the scene
 	const auto lightProj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f);
@@ -114,7 +123,7 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 	glBindFramebuffer(GL_FRAMEBUFFER, depthBuffer.fbo);
 	{
 		//Begin pass
-		glViewport(0, 0, 256, 256);
+		glViewport(0, 0, shadowScreenWidth, shadowScreenHeight);
 
 		//GFX Pass
 		glClear(GL_DEPTH_BUFFER_BIT);
@@ -135,6 +144,7 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		//GFX Pass
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+		glCullFace(GL_BACK);
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, tex);
@@ -146,7 +156,10 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		glBindTexture(GL_TEXTURE_2D, depthBuffer.depth);
 
 		shader.use();
-		modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
+		if (!paused)
+		{
+			modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
+		}
 		shader.setMat4("_Model", modelTransform.modelMatrix());
 		shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 		shader.setInt("_MainTex", 0);
@@ -162,6 +175,8 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		shader.setFloat("_Material.diffuseK", currMat->diffuseK);
 		shader.setFloat("_Material.specularK", currMat->specularK);
 		shader.setFloat("_Material.shininess", currMat->shininess);
+
+		shader.setFloat("_ShadowBias", shadowDebug.bias);
 
 		model.draw();
 
@@ -188,7 +203,7 @@ int main() {
 	GLint Rock_Color = ew::loadTexture("assets/Rock_Color.png");
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 
-	plane.load(ew::createPlane(10, 10, 10));
+	plane.load(ew::createPlane(100, 100, 10));
 
 	depthBuffer.init();
 
@@ -241,7 +256,12 @@ void drawUI() {
 			}
 		}
 	}
-	ImGui::Image((ImTextureID)(intptr_t)depthBuffer.depth, ImVec2(256, 256));
+
+	ImGui::SliderFloat("Shadow Bias", &shadowDebug.bias, 0.0, 0.01, "%.4f");
+	ImGui::SliderFloat("Suzanne Y Val", &suzanneTransform.position.y, -2, 2);
+	ImGui::Checkbox("Pause", &paused);
+
+	ImGui::Image((ImTextureID)(intptr_t)depthBuffer.depth, ImVec2(shadowScreenWidth, shadowScreenHeight));
 	ImGui::End();
 
 	ImGui::Render();

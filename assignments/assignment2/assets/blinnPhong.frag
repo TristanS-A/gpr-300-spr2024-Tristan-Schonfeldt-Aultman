@@ -32,13 +32,14 @@ uniform sampler2D _ShadowMap;
 uniform vec3 _EyePos;
 uniform Material _Material;
 uniform Light _Light;
+uniform float _ShadowBias;
 
 //Light source
 //uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
 uniform vec3 _CamPos;
 //uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 
-float shadowCalculations(vec4 fragPosLightSpace)
+float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 {
 	//Perspective devide -> normalized device coords
 	vec3 projectionCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
@@ -47,25 +48,24 @@ float shadowCalculations(vec4 fragPosLightSpace)
 	projectionCoords = (projectionCoords * 0.5) + 0.5;
 
 	////Way to get rid of plane out of camera issues for shadows
-	//if (projectionCoords.z <= 0.0 || projectionCoords.z >= 1.0)
-	//{
-	//	return 0.0f;
-	//}
+	if (projectionCoords.z <= 0.0 || projectionCoords.z > 1.0)
+	{
+		return 0.0f;
+	}
 
 	float closestDepth = texture(_ShadowMap, projectionCoords.xy).r;
 	float currentDepth = projectionCoords.z;
 
-	float bias = 0.0; //MAKE THIS A UNIFORM
+	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), _ShadowBias);  //Scales bias to light angle
 	float shadow = ((currentDepth - bias) > closestDepth) ? 1.0 : 0.0;
 
 	return shadow;
 }
 
-vec3 blinnPhong(vec3 normal, vec3 fragPos)
+vec3 blinnPhong(vec3 normal, vec3 fragPos, vec3 lightDir)
 {
 	//Normalize inputs
 	vec3 viewDir = normalize(_CamPos - fragPos);
-	vec3 lightDir = normalize(_Light.pos - fragPos);
 	vec3 halfDir = normalize(_Light.pos + viewDir);
 
 	//Dot products
@@ -81,9 +81,11 @@ vec3 blinnPhong(vec3 normal, vec3 fragPos)
 void main() 
 {
 	vec3 normal = normalize(fs_surface.worldNormal);
-	float shadow = shadowCalculations(fs_surface.lightPos);
+	vec3 lightDir = normalize(_Light.pos - fs_surface.worldPos);
+
+	float shadow = shadowCalculations(fs_surface.lightPos, lightDir, normal);
 	
-	vec3 lighting = blinnPhong(normal, fs_surface.worldPos);
+	vec3 lighting = blinnPhong(normal, fs_surface.worldPos, lightDir);
 
 	vec3 objectColor = texture(_MainTex, fs_surface.texcoord).rgb;
 
