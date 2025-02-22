@@ -27,8 +27,8 @@ void drawUI();
 //Global state
 int screenWidth = 1080;
 int screenHeight = 720;
-int shadowScreenWidth = 1080;
-int shadowScreenHeight = 1080;
+int shadowScreenWidth = 500;
+int shadowScreenHeight = 500;
 float prevFrameTime;
 float deltaTime;
 
@@ -65,8 +65,12 @@ struct DepthBuffer
 			shadowScreenWidth, shadowScreenHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+		//Fixes out of camera view issues (over sampling) for shadows
+		float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
 		//Bind depth texture attachment
 		glBindFramebuffer(GL_FRAMEBUFFER, depth);
@@ -87,6 +91,7 @@ struct DepthBuffer
 struct ShadowDebug
 {
 	float bias = 0.0;
+	int pcfFactor = 1.0f;
 } shadowDebug;
 
 //Caching things
@@ -177,6 +182,7 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		shader.setFloat("_Material.shininess", currMat->shininess);
 
 		shader.setFloat("_ShadowBias", shadowDebug.bias);
+		shader.setInt("_PCFFactor", shadowDebug.pcfFactor);
 
 		model.draw();
 
@@ -258,6 +264,7 @@ void drawUI() {
 	}
 
 	ImGui::SliderFloat("Shadow Bias", &shadowDebug.bias, 0.0, 0.01, "%.4f");
+	ImGui::SliderInt("Shadow PCF Factor", &shadowDebug.pcfFactor, 0.0, 10);
 	ImGui::SliderFloat("Suzanne Y Val", &suzanneTransform.position.y, -2, 2);
 	ImGui::Checkbox("Pause", &paused);
 

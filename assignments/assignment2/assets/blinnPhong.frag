@@ -33,6 +33,7 @@ uniform vec3 _EyePos;
 uniform Material _Material;
 uniform Light _Light;
 uniform float _ShadowBias;
+uniform int _PCFFactor;
 
 //Light source
 //uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
@@ -43,23 +44,34 @@ float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 {
 	//Perspective devide -> normalized device coords
 	vec3 projectionCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-	
+
 	//Map to 0-1
 	projectionCoords = (projectionCoords * 0.5) + 0.5;
 
-	////Way to get rid of plane out of camera issues for shadows
-	if (projectionCoords.z <= 0.0 || projectionCoords.z > 1.0)
+	////Way to get rid of plane out of camera view issues (over sampling) for shadows
+	if (projectionCoords.z  <= 0.0 || projectionCoords.z > 1.0)
 	{
-		return 0.0f;
+		return 0.0;
 	}
 
-	float closestDepth = texture(_ShadowMap, projectionCoords.xy).r;
 	float currentDepth = projectionCoords.z;
 
 	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), _ShadowBias);  //Scales bias to light angle
-	float shadow = ((currentDepth - bias) > closestDepth) ? 1.0 : 0.0;
 
-	return shadow;
+	float shadow = 0.0;
+	vec2 texelSize = 1.0 / textureSize(_ShadowMap, 0);
+	int num = 0;
+	for (int x = -_PCFFactor; x < _PCFFactor; ++x)
+	{
+		for (int y = -_PCFFactor; y < _PCFFactor; ++y)
+		{
+			float pcfDepth = texture(_ShadowMap, projectionCoords.xy + vec2(x, y) * texelSize).r;
+			shadow += ((currentDepth - bias) > pcfDepth) ? 1.0 : 0.0;
+			num++;
+		}
+	}
+
+	return shadow / (_PCFFactor * 2 * _PCFFactor * 2);
 }
 
 vec3 blinnPhong(vec3 normal, vec3 fragPos, vec3 lightDir)
