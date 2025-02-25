@@ -84,6 +84,7 @@ struct DepthBuffer
 			printf("Failed to bind framebuffer");
 		}
 
+		glClear(GL_DEPTH_BUFFER_BIT);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 } depthBuffer;
@@ -107,11 +108,13 @@ short matIndex = 0;
 Material* currMat = &mats[matIndex];
 bool usingNormalMap = true;
 bool paused = false;
+bool disableDepthClear = true;
+bool deformMesh = true;
 
 ew::Mesh plane;
 glm::vec3 lightVec = { 2.0f, 2.0f, -2.0f };
 
-void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, const float dt)
+void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, GLint snowTex, const float dt)
 {
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -131,7 +134,10 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		glViewport(0, 0, shadowScreenWidth, shadowScreenHeight);
 
 		//GFX Pass
-		glClear(GL_DEPTH_BUFFER_BIT);
+		if (!disableDepthClear)
+		{
+			glClear(GL_DEPTH_BUFFER_BIT);
+		}
 
 		shadowShader.use();
 		shadowShader.setMat4("_Model", modelTransform.modelMatrix());
@@ -172,7 +178,7 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		shader.setInt("_ShadowMap", 2);
 
 		shader.setVec3("_CamPos", camera.position);
-		shader.setVec3("_Light.color", glm::vec3(1.0f, 0.0f, 1.0f));
+		shader.setVec3("_Light.color", glm::vec3(1.0f, 1.0f, 1.0f));
 		shader.setVec3("_Light.pos", glm::vec3(lightVec));
 		shader.setMat4("_LightViewProj", lightViewProj);
 
@@ -187,7 +193,36 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Model &model, ew::Tr
 		model.draw();
 
 		//Light's view of the scene
-		shader.setMat4("_Model", glm::translate(glm::vec3(0.0f, -2.0f, 0.0f)));
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, snowTex);
+
+		if (deformMesh)
+		{
+			deformShader.use();
+			deformShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+			deformShader.setInt("_MainTex", 0);
+			deformShader.setInt("_NormalMap", 1);
+			deformShader.setInt("_ShadowMap", 2);
+
+			deformShader.setVec3("_CamPos", camera.position);
+			deformShader.setVec3("_Light.color", glm::vec3(1.0f, 1.0f, 1.0f));
+			deformShader.setVec3("_Light.pos", glm::vec3(lightVec));
+			deformShader.setMat4("_LightViewProj", lightViewProj);
+
+			deformShader.setFloat("_Material.ambientK", currMat->ambientK);
+			deformShader.setFloat("_Material.diffuseK", currMat->diffuseK);
+			deformShader.setFloat("_Material.specularK", currMat->specularK);
+			deformShader.setFloat("_Material.shininess", currMat->shininess);
+
+			deformShader.setFloat("_ShadowBias", shadowDebug.bias);
+			deformShader.setInt("_PCFFactor", shadowDebug.pcfFactor);
+			deformShader.setMat4("_Model", glm::translate(glm::vec3(0.0f, -2.0f, 0.0f)));
+		}
+		else
+		{
+			shader.setMat4("_Model", glm::translate(glm::vec3(0.0f, -2.0f, 0.0f)));
+		}
 		plane.draw();
 	}
 }
@@ -202,14 +237,16 @@ int main() {
 	camera.fov = 60.0f;
 
 	ew::Shader lit_Shader = ew::Shader("assets/blinnPhong.vert", "assets/blinnPhong.frag");
+	ew::Shader lit_Deform_Shader = ew::Shader("assets/shadowDeform.vert", "assets/shadowDeform.frag");
 	ew::Shader shadowShader = ew::Shader("assets/shadow.vert", "assets/shadow.frag");
 
 	ew::Model suzanne = ew::Model("assets/suzanne.obj");
 
 	GLint Rock_Color = ew::loadTexture("assets/Rock_Color.png");
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
+	GLint snowText = ew::loadTexture("assets/snow.png");
 
-	plane.load(ew::createPlane(100, 100, 10));
+	plane.load(ew::createPlane(10, 10, 100));
 
 	depthBuffer.init();
 
@@ -222,7 +259,7 @@ int main() {
 
 		//RENDER
 		camController.move(window, &camera, deltaTime);
-		render(lit_Shader, shadowShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
+		render(lit_Shader, shadowShader, lit_Deform_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, snowText, deltaTime);
 		drawUI();
 
 		glfwSwapBuffers(window);
@@ -267,6 +304,14 @@ void drawUI() {
 	ImGui::SliderInt("Shadow PCF Factor", &shadowDebug.pcfFactor, 0.0, 10);
 	ImGui::SliderFloat("Suzanne Y Val", &suzanneTransform.position.y, -2, 2);
 	ImGui::Checkbox("Pause", &paused);
+	ImGui::Checkbox("Enable Mesh Deform", &deformMesh);
+	if (ImGui::Checkbox("Disable Shadow Depth Clear", &disableDepthClear))
+	{
+		if (disableDepthClear)
+		{
+			glClear(GL_DEPTH_BUFFER_BIT);
+		}
+	}
 
 	ImGui::Image((ImTextureID)(intptr_t)depthBuffer.depth, ImVec2(shadowScreenWidth, shadowScreenHeight));
 	ImGui::End();

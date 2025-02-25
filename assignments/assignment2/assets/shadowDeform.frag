@@ -58,6 +58,7 @@ float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 
 	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), _ShadowBias);  //Scales bias to light angle
 
+	//
 	if (_PCFFactor != 0)
 	{
 		float shadow = 0.0;
