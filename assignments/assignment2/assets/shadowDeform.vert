@@ -12,7 +12,7 @@ out Surface
 {
 	vec3 worldPos;
 	vec3 worldNormal;
-	vec4 lightPos;
+	vec4 fragPosLightSpace;
 	vec2 texcoord;
 	mat3 TBN_Mat;
 } vs_surface;
@@ -26,14 +26,17 @@ uniform sampler2D _ShadowMap;
 void main()
 {
 	vec3 newPos = v_In_Pos;
-	vs_surface.lightPos = _LightViewProj * vec4(vec3(_Model * vec4(newPos, 1.0)), 1.0);
+
+	//Calculates fragPos in light space
+	vs_surface.fragPosLightSpace = _LightViewProj * vec4(vec3(_Model * vec4(newPos, 1.0)), 1.0);
 
 	//Perspective devide -> normalized device coords
-	vec3 projectionCoords = vs_surface.lightPos.xyz / vs_surface.lightPos.w;
+	vec3 projectionCoords = vs_surface.fragPosLightSpace.xyz / vs_surface.fragPosLightSpace.w;
 
 	//Map to 0-1
 	projectionCoords = (projectionCoords * 0.5) + 0.5;
 
+	//Get new height from shadow map
 	float height = (texture(_ShadowMap, projectionCoords.xy).r - 1) * -1;
 	newPos = v_In_Pos - vec3(0, height * 0.5, 0);
 

@@ -5,7 +5,7 @@ in Surface
 {
 	vec3 worldPos;
 	vec3 worldNormal;
-	vec4 lightPos;
+	vec4 fragPosLightSpace;
 	vec2 texcoord;
 	mat3 TBN_Mat;
 } fs_surface;
@@ -35,11 +35,10 @@ uniform Light _Light;
 uniform float _ShadowBias;
 uniform int _PCFFactor;
 
-//Light source
-//uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
 uniform vec3 _CamPos;
 //uniform vec3 _AmbientColor = vec3(0.3, 0.4, 0.46);
 
+//Calculates shadows using shadow map
 float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 {
 	//Perspective devide -> normalized device coords
@@ -58,8 +57,10 @@ float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 
 	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), _ShadowBias);  //Scales bias to light angle
 
+	//Branch for ImGui to show PCF vs no PCF
 	if (_PCFFactor != 0)
 	{
+		//Calculates PCF
 		float shadow = 0.0;
 		vec2 texelSize = 1.0 / textureSize(_ShadowMap, 0);
 		int num = 0;
@@ -85,6 +86,7 @@ float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 	}
 }
 
+//Calculates Blinn Phong lighting
 vec3 blinnPhong(vec3 normal, vec3 fragPos, vec3 lightDir)
 {
 	//Normalize inputs
@@ -106,7 +108,7 @@ void main()
 	vec3 normal = normalize(fs_surface.worldNormal);
 	vec3 lightDir = normalize(_Light.pos - fs_surface.worldPos);
 
-	float shadow = shadowCalculations(fs_surface.lightPos, lightDir, normal);
+	float shadow = shadowCalculations(fs_surface.fragPosLightSpace, lightDir, normal);
 	
 	vec3 lighting = blinnPhong(normal, fs_surface.worldPos, lightDir);
 

@@ -34,7 +34,7 @@ float deltaTime;
 
 struct Material
 {
-	float ambientK = 1.0;
+	float ambientK = 0.4;
 	float diffuseK = 0.5;
 	float specularK = 0.5;
 	float shininess = 128;
@@ -47,11 +47,13 @@ enum Materials {
 	PLASTIC
 };
 
+//Depth buffer for shadow map
 struct DepthBuffer
 {
 	GLuint fbo;
 	GLuint depth;
 
+	//Initiates and generates fram buffer for shadow map
 	void init()
 	{
 		//Bind framebuffer
@@ -65,10 +67,10 @@ struct DepthBuffer
 			shadowScreenWidth, shadowScreenHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		//Fixes out of camera view issues (over sampling) for shadows by having no texture wrapping
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-
-		//Fixes out of camera view issues (over sampling) for shadows
 		float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
 		glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
@@ -89,6 +91,7 @@ struct DepthBuffer
 	}
 } depthBuffer;
 
+//Debug strruct for shadow
 struct ShadowDebug
 {
 	float bias = 0.0;
@@ -99,19 +102,23 @@ struct ShadowDebug
 ew::Camera camera;
 ew::CameraController camController;
 ew::Transform suzanneTransform;
+ew::Mesh plane;
+
+//Materials
 Material mats[3] = { 
-	{1.0, 0.6, 1.0, 30, "Metal"},
-	{1.0, 0.8, 0.3, 128, "Rock"},
-	{1.0, 0.8, 0.4, 30, "Plastic"}
+	{0.3, 0.6, 1.0, 30, "Metal"},
+	{0.2, 0.8, 0.3, 128, "Rock"},
+	{0.4, 0.8, 0.4, 30, "Plastic"}
 };
 short matIndex = 0;
 Material* currMat = &mats[matIndex];
-bool usingNormalMap = true;
+
+//ImGui control vars
 bool paused = false;
 bool disableDepthClear = true;
 bool deformMesh = true;
 
-ew::Mesh plane;
+//Light info
 glm::vec3 lightVec = { 2.0f, 2.0f, -2.0f };
 
 void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, GLint snowTex, const float dt)
@@ -120,7 +127,7 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader,
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 	glCullFace(GL_BACK);
-	//glCullFace(GL_FRONT); //MAKE THIS IMGUI TOGGLE ABLE FOR SELF SHADOW ISSUES (CULL FRONT). ALSO DO PCF
+	//glCullFace(GL_FRONT);  //This line causes shadow issues when suzzane is inside the plane
 
 	//Light's view of the scene
 	const auto lightProj = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f);
@@ -128,9 +135,9 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader,
 	const auto lightViewProj = lightProj * lightView;
 
 	//Shadow pass
-	glBindFramebuffer(GL_FRAMEBUFFER, depthBuffer.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthBuffer.fbo); //Switches to depth buffer fbo for rendering shadows
 	{
-		//Begin pass
+		//Begin pass by resizing window
 		glViewport(0, 0, shadowScreenWidth, shadowScreenHeight);
 
 		//GFX Pass
@@ -145,7 +152,7 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader,
 	
 		model.draw();
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); //Switches back to default framebuffer
 
 	//Render lighting
 	{
@@ -192,13 +199,12 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader,
 
 		model.draw();
 
-		//Light's view of the scene
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, snowTex);
-
+		//Basically an if statment to render the snow effect
 		if (deformMesh)
 		{
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, snowTex);
+
 			deformShader.use();
 			deformShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 			deformShader.setInt("_MainTex", 0);
@@ -221,6 +227,9 @@ void render(ew::Shader shader, ew::Shader shadowShader, ew::Shader deformShader,
 		}
 		else
 		{
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, tex);
+
 			shader.setMat4("_Model", glm::translate(glm::vec3(0.0f, -2.0f, 0.0f)));
 		}
 		plane.draw();
@@ -231,11 +240,13 @@ int main() {
 	GLFWwindow* window = initWindow("Assignment 2", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
+	//Camera setup
 	camera.position = { 0.0f, 0.0f, 5.0f };
 	camera.target = { 0.0f, 0.0f, 0.0f };
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
 
+	//Shader, model, and texture loading
 	ew::Shader lit_Shader = ew::Shader("assets/blinnPhong.vert", "assets/blinnPhong.frag");
 	ew::Shader lit_Deform_Shader = ew::Shader("assets/shadowDeform.vert", "assets/shadowDeform.frag");
 	ew::Shader shadowShader = ew::Shader("assets/shadow.vert", "assets/shadow.frag");
@@ -257,8 +268,9 @@ int main() {
 		deltaTime = time - prevFrameTime;
 		prevFrameTime = time;
 
-		//RENDER
 		camController.move(window, &camera, deltaTime);
+
+		//RENDER
 		render(lit_Shader, shadowShader, lit_Deform_Shader, suzanne, suzanneTransform, Rock_Color, rockNormal, snowText, deltaTime);
 		drawUI();
 
@@ -299,10 +311,20 @@ void drawUI() {
 			}
 		}
 	}
+	ImGui::Dummy({ 2, 20 });
 
+	//Shadow ImGui controls
 	ImGui::SliderFloat("Shadow Bias", &shadowDebug.bias, 0.0, 0.01, "%.4f");
 	ImGui::SliderInt("Shadow PCF Factor", &shadowDebug.pcfFactor, 0.0, 10);
+	ImGui::Dummy({ 2, 20 });
+	ImGui::SliderFloat("Suzanne X Val", &suzanneTransform.position.x, -4, 4);
 	ImGui::SliderFloat("Suzanne Y Val", &suzanneTransform.position.y, -2, 2);
+	ImGui::SliderFloat("Suzanne Z Val", &suzanneTransform.position.z, -4, 4);
+	ImGui::Dummy({ 2, 20 });
+	ImGui::SliderFloat("Light X Val", &lightVec.x, -4, 4);
+	ImGui::SliderFloat("Light Y Val", &lightVec.y, -2, 2);
+	ImGui::SliderFloat("Light Z Val", &lightVec.z, -4, 4);
+	ImGui::Dummy({ 2, 20 });
 	ImGui::Checkbox("Pause", &paused);
 	ImGui::Checkbox("Enable Mesh Deform", &deformMesh);
 	if (ImGui::Checkbox("Disable Shadow Depth Clear", &disableDepthClear))
