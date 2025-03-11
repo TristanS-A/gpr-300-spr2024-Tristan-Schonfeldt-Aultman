@@ -10,6 +10,7 @@ in Surface
 
 layout (location = 0) out vec4 fragColor0;
 layout (location = 1) out vec4 fragColor1;
+layout (location = 2) out vec4 fragColor2;
 
 uniform sampler2D _MainTex;
 uniform sampler2D _NormalMap;
@@ -25,7 +26,8 @@ void main()
 	//vec3 toLight = _LightDir;
 	//vec3 toEye = normalize(_EyePos - fs_surface.worldPos);
 
-	//vec3 normal = normalize(fs_surface.worldNormal);   //Old regular vertex normals
+	vec3 normal = normalize(fs_surface.worldNormal);   //Old regular vertex normals
+	//normal = normal * 0.5 + 0.5;
 	
 	//Calculate diffuse lighting
 	//float diffuseFactor = max(dot(normal, toLight), 0.0);
@@ -41,11 +43,11 @@ void main()
 	//lightColor += _AmbientColor * _Material.ambientK;
 
 	//Calculate final light color
-	//FragColor = vec4(normal * 0.5 + 0.5, 1.0);
 	vec3 objectColor0 = texture(_MainTex, fs_surface.texcoord).rgb;
-	vec3 objectColor1 = vec3(fs_surface.worldPos.xyz);;
+	vec3 objectColor1 = vec3(fs_surface.worldPos.xyz);
+	vec3 objectColor2 = vec3(normal);
 
-	//FragColor = vec4(objectColor * lightColor, 1.0);
 	fragColor0 = vec4(objectColor0, 1.0);
 	fragColor1 = vec4(objectColor1, 1.0);
+	fragColor2 = vec4(objectColor2, 1.0);
 }

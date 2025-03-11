@@ -50,8 +50,9 @@ static float quadVertecies[] = {
 struct FrameBuffer
 {
 	GLuint fbo;
-	GLuint color0;
-	GLuint color1;
+	GLuint color;
+	GLuint position;
+	GLuint normal;
 	GLuint depth;
 
 	//Initiates and generates fram buffer for shadow map
@@ -62,28 +63,38 @@ struct FrameBuffer
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
 		//Create color0 texture attachment
-		glGenTextures(1, &color0);
-		glBindTexture(GL_TEXTURE_2D, color0);
+		glGenTextures(1, &color);
+		glBindTexture(GL_TEXTURE_2D, color);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenWidth, screenHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 		//Bind color0 attachment
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color0, 0);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
 
 		//Create color1 texture attachment
-		glGenTextures(1, &color1);
-		glBindTexture(GL_TEXTURE_2D, color1);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenWidth, screenHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+		glGenTextures(1, &position);
+		glBindTexture(GL_TEXTURE_2D, position);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 		//Bind color1 attachment
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, color1, 0);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, position, 0);
+
+		//Create color1 texture attachment
+		glGenTextures(1, &normal);
+		glBindTexture(GL_TEXTURE_2D, normal);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		//Bind color1 attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, normal, 0);
 
 		//Configure drawing to multiple buffers
-		GLuint arr[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-		glDrawBuffers(2, arr);
+		GLuint arr[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+		glDrawBuffers(3, arr);
 
 		//Create depth texture attachment
 		glGenTextures(1, &depth);
@@ -105,10 +116,24 @@ struct FrameBuffer
 	}
 } framebuffer;
 
+struct Material
+{
+	float ambientK = 0.4;
+	float diffuseK = 0.5;
+	float specularK = 0.5;
+	float shininess = 128;
+};
+
 //Caching things
 ew::Camera camera;
 ew::CameraController camController;
 ew::Transform suzanneTransform;
+
+//Light info
+glm::vec3 lightVec = { 2.0f, 20.0f, -2.0f };
+
+//Material info
+Material currMat = { 0.0, 1.0, 1.0, 128 };
 
 void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, const float dt)
 {
@@ -123,7 +148,7 @@ void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, e
 
 	//GFX Pass
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
@@ -137,7 +162,7 @@ void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, e
 	shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 	shader.setInt("_MainTex", 0);
 
-	for (int i = 0; i < 3000; i++)
+	for (int i = 0; i < 30; i++)
 	{
 		for (int j = 0; j < 300; j++)
 		{
@@ -151,23 +176,31 @@ void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, e
 	glBindVertexArray(fullscreenQuad.vao);
 
 	//GFX Pass
-	glClearColor(0.6f, 0.8f, 0.92f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.color0);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.color);
 
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, tex);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
 
 	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, tex);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
 
 	postProcessShader.use();
 	postProcessShader.setInt("_Albedo", 0);
 	postProcessShader.setInt("_PositionTex", 1);
 	postProcessShader.setInt("_NormalTex", 2);
+	postProcessShader.setVec3("_CamPos", camera.position);
+	postProcessShader.setVec3("_Light.color", glm::vec3(1.0f, 1.0f, 1.0f));
+	postProcessShader.setVec3("_Light.pos", glm::vec3(lightVec));
+
+	postProcessShader.setFloat("_Material.ambientK", currMat.ambientK);
+	postProcessShader.setFloat("_Material.diffuseK", currMat.diffuseK);
+	postProcessShader.setFloat("_Material.specularK", currMat.specularK);
+	postProcessShader.setFloat("_Material.shininess", currMat.shininess);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
@@ -237,8 +270,9 @@ void drawUI() {
 
 	ImGui::Begin("Settings");
 
-	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color0, ImVec2(800, 600));
-	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color1, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
 
 	ImGui::End();
 
