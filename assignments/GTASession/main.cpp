@@ -19,6 +19,8 @@
 #include <glm/gtx/transform.hpp>
 #include <ew/external//stb_image.h>
 
+#include <random>
+
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
 void drawUI();
@@ -29,7 +31,7 @@ int screenHeight = 720;
 float prevFrameTime;
 float deltaTime;
 
-struct FullscreenQuad 
+struct FullscreenQuad
 {
 	GLuint vao;
 	GLuint vbo;
@@ -162,7 +164,12 @@ Material currMat = { 0.0, 1.0, 1.0, 128 };
 //Light sphere
 ew::Mesh sphere;
 
-void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, const float dt)
+//Setting up random number generator
+std::random_device dev;
+std::mt19937 rng(dev());
+std::uniform_int_distribution<std::mt19937::result_type> randomNum(0, 1);
+
+void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
 {
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -174,10 +181,10 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
 	//GFX Pass
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-	for (int i = 0; i < 30; i++)
+	for (int i = 0; i < 3; i++)
 	{
 		for (int j = 0; j < 300; j++)
 		{
@@ -193,21 +200,27 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 			shader.setInt("_MainTex", 0);
 			shader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 0, j * 2.0f)));
 			model.draw();
-
-			lightVisShader.use();
-			lightVisShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
-			lightVisShader.setVec3("_Color", glm::vec3(j / 300.0, j / 300.0, j / 300.0));
-			lightVisShader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 5, j * 2.0f)));
-			sphere.draw();
 		}
 	}
 
-	glBindVertexArray(fullscreenQuad.vao);
-	glDisable(GL_DEPTH_TEST);
-	for (int i = 0; i < 1; i++)
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+	for (int i = 0; i < 3; i++)
 	{
-		for (int j = 0; j < 2; j++)
+		for (int j = 0; j < 30; j++)
 		{
+			glEnable(GL_DEPTH_TEST);
+
+			glm::vec3 randColor = glm::vec3(randomNum(rng), randomNum(rng), randomNum(rng)) * 0.1f;
+
+			lightVisShader.use();
+			lightVisShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+			lightVisShader.setVec3("_Color", randColor);
+			lightVisShader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 5, j * 2.0f)));
+			sphere.draw();
+
+			glBindVertexArray(fullscreenQuad.vao);
+			glDisable(GL_DEPTH_TEST);
+
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, framebuffer.color);
 
@@ -225,8 +238,8 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 			lightingShader.setInt("_NormalTex", 2);
 			lightingShader.setInt("_PrevLightPass", 3);
 			lightingShader.setVec3("_CamPos", camera.position);
-			lightingShader.setVec3("_Light.color", glm::vec3(1 - j, 0.0f, j));
-			lightingShader.setVec3("_Light.pos", glm::vec3(0 , 20, 0));
+			lightingShader.setVec3("_Light.color", randColor);
+			lightingShader.setVec3("_Light.pos", glm::vec3(0, 20, 0));
 
 			lightingShader.setFloat("_Material.ambientK", currMat.ambientK);
 			lightingShader.setFloat("_Material.diffuseK", currMat.diffuseK);
@@ -240,7 +253,7 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	//GFX Pass
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
@@ -382,4 +395,3 @@ GLFWwindow* initWindow(const char* title, int width, int height) {
 
 	return window;
 }
-
