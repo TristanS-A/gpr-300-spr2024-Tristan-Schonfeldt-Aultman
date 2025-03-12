@@ -22,27 +22,8 @@ uniform vec3 _EyePos;
 
 void main() 
 {
-	//Compute necessary vectors
-	//vec3 toLight = _LightDir;
-	//vec3 toEye = normalize(_EyePos - fs_surface.worldPos);
+	vec3 normal = normalize(fs_surface.worldNormal);
 
-	vec3 normal = normalize(fs_surface.worldNormal);   //Old regular vertex normals
-	//normal = normal * 0.5 + 0.5;
-	
-	//Calculate diffuse lighting
-	//float diffuseFactor = max(dot(normal, toLight), 0.0);
-
-	//Calculate specular lighting
-	//vec3 halfVec = normalize(toLight + toEye);
-	//float specularFactor = pow(max(dot(normal, halfVec), 0.0), _Material.shininess);
-
-	//Combines specular and difusion light with light color
-	//vec3 lightColor = (diffuseFactor * _Material.diffuseK + specularFactor * _Material.specularK) * _LightCol;
-
-	//Add ambient light
-	//lightColor += _AmbientColor * _Material.ambientK;
-
-	//Calculate final light color
 	vec3 objectColor0 = texture(_MainTex, fs_surface.texcoord).rgb;
 	vec3 objectColor1 = vec3(fs_surface.worldPos.xyz);
 	vec3 objectColor2 = vec3(normal.xyz);

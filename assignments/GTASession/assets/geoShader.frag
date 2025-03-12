@@ -15,6 +15,7 @@ void main()
    vec3 lightingColor = texture(_LightingTex, vs_textcoords).rgb;
    vec4 lights = texture(_Lights, vs_textcoords).rgba;
    
+   //vec3 finalLighting = objectColor;
    vec3 finalLighting = lightingColor * objectColor;
    finalLighting = mix(finalLighting, lights.rgb, lights.a);
 
