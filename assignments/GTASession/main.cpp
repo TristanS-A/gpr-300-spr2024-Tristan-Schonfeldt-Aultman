@@ -14,6 +14,7 @@
 #include <ew/cameraController.h>
 #include <ew/transform.h>
 #include <ew/texture.h>
+#include <ew/procGen.h>
 
 #include <glm/gtx/transform.hpp>
 #include <ew/external//stb_image.h>
@@ -53,6 +54,8 @@ struct FrameBuffer
 	GLuint color;
 	GLuint position;
 	GLuint normal;
+	GLuint lighting;
+	GLuint lights;
 	GLuint depth;
 
 	//Initiates and generates fram buffer for shadow map
@@ -92,9 +95,29 @@ struct FrameBuffer
 		//Bind color1 attachment
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, normal, 0);
 
+		//Create lighting texture attachment
+		glGenTextures(1, &lighting);
+		glBindTexture(GL_TEXTURE_2D, lighting);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		//Bind lighting attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, lighting, 0);
+
+		//Create lighting texture attachment
+		glGenTextures(1, &lights);
+		glBindTexture(GL_TEXTURE_2D, lights);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		//Bind lighting attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, lights, 0);
+
 		//Configure drawing to multiple buffers
-		GLuint arr[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-		glDrawBuffers(3, arr);
+		GLuint arr[5] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
+		glDrawBuffers(5, arr);
 
 		//Create depth texture attachment
 		glGenTextures(1, &depth);
@@ -128,6 +151,7 @@ struct Material
 ew::Camera camera;
 ew::CameraController camController;
 ew::Transform suzanneTransform;
+ew::Transform lightSphereTransform;
 
 //Light info
 glm::vec3 lightVec = { 2.0f, 20.0f, -2.0f };
@@ -135,7 +159,10 @@ glm::vec3 lightVec = { 2.0f, 20.0f, -2.0f };
 //Material info
 Material currMat = { 0.0, 1.0, 1.0, 128 };
 
-void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, const float dt)
+//Light sphere
+ew::Mesh sphere;
+
+void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model &model, ew::Transform &modelTransform, GLint tex, GLint normalMap, const float dt)
 {
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -150,30 +177,67 @@ void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, e
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, normalMap);
-
-	shader.use();
-	modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
-	shader.setMat4("_Model", modelTransform.modelMatrix());
-	shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
-	shader.setInt("_MainTex", 0);
-
 	for (int i = 0; i < 30; i++)
 	{
 		for (int j = 0; j < 300; j++)
 		{
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, tex);
+
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, normalMap);
+
+			shader.use();
+			modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
+			shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+			shader.setInt("_MainTex", 0);
 			shader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 0, j * 2.0f)));
 			model.draw();
+
+			lightVisShader.use();
+			lightVisShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+			lightVisShader.setVec3("_Color", glm::vec3(j / 300.0, j / 300.0, j / 300.0));
+			lightVisShader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 5, j * 2.0f)));
+			sphere.draw();
+		}
+	}
+
+	glBindVertexArray(fullscreenQuad.vao);
+	glDisable(GL_DEPTH_TEST);
+	for (int i = 0; i < 1; i++)
+	{
+		for (int j = 0; j < 2; j++)
+		{
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, framebuffer.color);
+
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, framebuffer.position);
+
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
+
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_2D, framebuffer.lighting);
+
+			lightingShader.use();
+			lightingShader.setInt("_PositionTex", 1);
+			lightingShader.setInt("_NormalTex", 2);
+			lightingShader.setInt("_PrevLightPass", 3);
+			lightingShader.setVec3("_CamPos", camera.position);
+			lightingShader.setVec3("_Light.color", glm::vec3(1 - j, 0.0f, j));
+			lightingShader.setVec3("_Light.pos", glm::vec3(0 , 20, 0));
+
+			lightingShader.setFloat("_Material.ambientK", currMat.ambientK);
+			lightingShader.setFloat("_Material.diffuseK", currMat.diffuseK);
+			lightingShader.setFloat("_Material.specularK", currMat.specularK);
+			lightingShader.setFloat("_Material.shininess", currMat.shininess);
+
+			glDrawArrays(GL_TRIANGLES, 0, 6);
 		}
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	glBindVertexArray(fullscreenQuad.vao);
 
 	//GFX Pass
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -184,23 +248,15 @@ void render(ew::Shader shader, ew::Shader postProcessShader, ew::Model &model, e
 	glBindTexture(GL_TEXTURE_2D, framebuffer.color);
 
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.lighting);
 
 	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.lights);
 
 	postProcessShader.use();
 	postProcessShader.setInt("_Albedo", 0);
-	postProcessShader.setInt("_PositionTex", 1);
-	postProcessShader.setInt("_NormalTex", 2);
-	postProcessShader.setVec3("_CamPos", camera.position);
-	postProcessShader.setVec3("_Light.color", glm::vec3(1.0f, 1.0f, 1.0f));
-	postProcessShader.setVec3("_Light.pos", glm::vec3(lightVec));
-
-	postProcessShader.setFloat("_Material.ambientK", currMat.ambientK);
-	postProcessShader.setFloat("_Material.diffuseK", currMat.diffuseK);
-	postProcessShader.setFloat("_Material.specularK", currMat.specularK);
-	postProcessShader.setFloat("_Material.shininess", currMat.shininess);
+	postProcessShader.setInt("_LightingTex", 1);
+	postProcessShader.setInt("_Lights", 2);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
@@ -217,6 +273,8 @@ int main() {
 	camera.farPlane = 1000;
 
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader lightingShaderPass = ew::Shader("assets/lightingPass.vert", "assets/lightingPass.frag");
+	ew::Shader lightVisShader = ew::Shader("assets/lightVis.vert", "assets/lightVis.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/geoShader.vert", "assets/geoShader.frag");
 
 	ew::Model suzanne = ew::Model("assets/suzanne.obj");
@@ -226,6 +284,7 @@ int main() {
 
 	framebuffer.init();
 
+	sphere.load(ew::createSphere(0.5f, 4));
 
 	//Initialize fullscreen quad
 	glGenVertexArrays(1, &fullscreenQuad.vao);
@@ -254,7 +313,7 @@ int main() {
 
 		//RENDER
 		camController.move(window, &camera, deltaTime);
-		render(litShader, postProcessShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
+		render(litShader, lightingShaderPass, lightVisShader, postProcessShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
 		drawUI();
 
 		glfwSwapBuffers(window);
@@ -273,6 +332,8 @@ void drawUI() {
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.lighting, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.lights, ImVec2(800, 600));
 
 	ImGui::End();
 
