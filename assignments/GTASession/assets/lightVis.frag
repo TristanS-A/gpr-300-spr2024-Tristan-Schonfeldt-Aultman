@@ -1,10 +1,10 @@
 #version 450
 
-layout (location = 4) out vec4 fragColor4;
+out vec4 FragColor;
 
 uniform vec3 _Color;
 
 void main() 
 {
-	fragColor4 = vec4(_Color, 1.0);
+	FragColor = vec4(_Color, 1.0);
 }

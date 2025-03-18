@@ -25,10 +25,10 @@ void main()
 	vec3 normal = normalize(fs_surface.worldNormal);
 
 	vec3 objectColor0 = texture(_MainTex, fs_surface.texcoord).rgb;
-	vec3 objectColor1 = vec3(fs_surface.worldPos.xyz);
-	vec3 objectColor2 = vec3(normal.xyz);
+	vec3 position = vec3(fs_surface.worldPos.xyz);
+	vec3 normals = vec3(normal.xyz);
 
 	fragColor0 = vec4(objectColor0, 1.0);
-	fragColor1 = vec4(objectColor1, 1.0);
-	fragColor2 = vec4(objectColor2, 1.0);
+	fragColor1 = vec4(position, 1.0);
+	fragColor2 = vec4(normals, 1.0);
 }

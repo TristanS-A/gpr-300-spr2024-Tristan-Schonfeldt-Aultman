@@ -56,8 +56,6 @@ struct FrameBuffer
 	GLuint color;
 	GLuint position;
 	GLuint normal;
-	GLuint lighting;
-	GLuint lights;
 	GLuint depth;
 
 	//Initiates and generates fram buffer for shadow map
@@ -97,29 +95,9 @@ struct FrameBuffer
 		//Bind color1 attachment
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, normal, 0);
 
-		//Create lighting texture attachment
-		glGenTextures(1, &lighting);
-		glBindTexture(GL_TEXTURE_2D, lighting);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		//Bind lighting attachment
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, lighting, 0);
-
-		//Create lighting texture attachment
-		glGenTextures(1, &lights);
-		glBindTexture(GL_TEXTURE_2D, lights);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		//Bind lighting attachment
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, lights, 0);
-
 		//Configure drawing to multiple buffers
-		GLuint arr[5] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
-		glDrawBuffers(5, arr);
+		GLuint arr[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+		glDrawBuffers(3, arr);
 
 		//Create depth texture attachment
 		glGenTextures(1, &depth);
@@ -129,7 +107,7 @@ struct FrameBuffer
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 		//Bind depth texture attachment
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depth, 0);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth, 0);
 
 		//Check if frame buffer was created
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -194,12 +172,13 @@ void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform
 			}
 		}
 	}
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void calculateLighting(ew::Shader lightingShader)
 {
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(fullscreenQuad.vao);
 
 	srand(0);
@@ -211,11 +190,11 @@ void calculateLighting(ew::Shader lightingShader)
 			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
 			glm::vec3 lightPos = glm::vec3(i * 2.0f, 5, j * 2.0f);
 
-			lightingShader.setVec3("_Lights[" + std::to_string(i + j) + "].color", randColor);
-			lightingShader.setVec3("_Lights[" + std::to_string(i + j) + "].pos", lightPos);
+			lightingShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].color", randColor);
+			lightingShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].pos", lightPos);
 
-			lightsPos[i] = lightPos;
-			lightsCol[i] = randColor;
+			lightsPos[i * 10 + j] = lightPos;
+			lightsCol[i * 10 + j] = randColor;
 		}
 	}
 
@@ -247,19 +226,43 @@ void applyGeoShader(ew::Shader geoShader)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
+	glBindVertexArray(fullscreenQuad.vao);
+
+	srand(0);
+	geoShader.use();
+	for (int i = 0; i < 10; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
+			glm::vec3 lightPos = glm::vec3(i * 2.0f, 5, j * 2.0f);
+
+			geoShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].color", randColor);
+			geoShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].pos", lightPos);
+
+			lightsPos[i * 10 + j] = lightPos;
+			lightsCol[i * 10 + j] = randColor;
+		}
+	}
+
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.color);
 
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.lighting);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
 
 	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.lights);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
 
-	geoShader.use();
 	geoShader.setInt("_Albedo", 0);
-	geoShader.setInt("_LightingTex", 1);
-	geoShader.setInt("_Lights", 2);
+	geoShader.setInt("_PositionTex", 1);
+	geoShader.setInt("_NormalTex", 2);
+	geoShader.setVec3("_CamPos", camera.position);
+
+	geoShader.setFloat("_Material.ambientK", currMat.ambientK);
+	geoShader.setFloat("_Material.diffuseK", currMat.diffuseK);
+	geoShader.setFloat("_Material.specularK", currMat.specularK);
+	geoShader.setFloat("_Material.shininess", currMat.shininess);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
@@ -267,6 +270,11 @@ void applyGeoShader(ew::Shader geoShader)
 
 void renderDebugLights(ew::Shader lightVisShader)
 {
+	glEnable(GL_DEPTH_TEST);
+
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer.fbo);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	lightVisShader.use();
@@ -280,7 +288,7 @@ void renderDebugLights(ew::Shader lightVisShader)
 	}
 }
 
-void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
+void render(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
 {	
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -295,8 +303,6 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	renderSuzannes(shader, tex, modelTransform, model, dt);
-
-	calculateLighting(lightingShader);
 
 	applyGeoShader(postProcessShader);
 
@@ -314,7 +320,7 @@ int main() {
 	camera.farPlane = 1000;
 
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
-	ew::Shader lightingShaderPass = ew::Shader("assets/lightingPass.vert", "assets/lightingPass.frag");
+	//ew::Shader lightingShaderPass = ew::Shader("assets/lightingPass.vert", "assets/lightingPass.frag");
 	ew::Shader lightVisShader = ew::Shader("assets/lightVis.vert", "assets/lightVis.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/geoShader.vert", "assets/geoShader.frag");
 
@@ -356,7 +362,7 @@ int main() {
 		camController.move(window, &camera, deltaTime);
 
 		// deferred; render all geo data of scene (albedo, position, normla)
-		render(litShader, lightingShaderPass, lightVisShader, postProcessShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
+		render(litShader, lightVisShader, postProcessShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
 
 		// postprocess; render blinnphong
 		// add lighting data
@@ -382,8 +388,6 @@ void drawUI() {
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
-	ImGui::Image((ImTextureID)(intptr_t)framebuffer.lighting, ImVec2(800, 600));
-	ImGui::Image((ImTextureID)(intptr_t)framebuffer.lights, ImVec2(800, 600));
 
 	ImGui::End();
 
