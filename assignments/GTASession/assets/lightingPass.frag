@@ -60,5 +60,5 @@ void main()
 		finalLighting += _Lights[i].color * ((_Material.ambientK + lighting));
    }
 
-   fragColor3 = vec4(1.0, 0.0, 1.0, 1.0);
+   fragColor3 = vec4(finalLighting, 1.0);
 }

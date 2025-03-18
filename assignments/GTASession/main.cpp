@@ -167,7 +167,13 @@ ew::Mesh sphere;
 void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	{
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, tex);
+
 		for (int i = 0; i < 10; i++)
 		{
 			for (int j = 0; j < 10; j++)
@@ -183,7 +189,6 @@ void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform
 			}
 		}
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void drawAndAddLights(ew::Shader lightingShader, ew::Shader lightVisShader)
@@ -234,6 +239,8 @@ void calculateLighting(ew::Shader lightingShader)
 
 void applyGeoShader(ew::Shader geoShader)
 {
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 	//GFX Pass
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -273,11 +280,11 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 
 	renderSuzannes(shader, tex, modelTransform, model, dt);
 
-	//drawAndAddLights(lightingShader, lightVisShader);
+	drawAndAddLights(lightingShader, lightVisShader);
 
-	//calculateLighting(lightingShader);
+	calculateLighting(lightingShader);
 
-	//applyGeoShader(postProcessShader);
+	applyGeoShader(postProcessShader);
 }
 
 int main() {
