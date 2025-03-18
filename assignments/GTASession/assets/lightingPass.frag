@@ -6,7 +6,6 @@ in vec2 vs_textcoords;
 
 uniform sampler2D _PositionTex;
 uniform sampler2D _NormalTex;
-uniform sampler2D _PrevLightPass;
 
 uniform vec3 _CamPos;
 
@@ -16,7 +15,8 @@ struct Light
 	vec3 pos;
 };
 
-uniform Light _Light;
+uniform int lightsLength = 100;
+uniform Light[100] _Lights;
 
 struct Material 
 {
@@ -49,12 +49,16 @@ void main()
 {
    vec3 positionColor = texture(_PositionTex, vs_textcoords).xyz;
    vec3 normalColor = texture(_NormalTex, vs_textcoords).xyz;
-   vec3 prevLightPassColor = texture(_PrevLightPass, vs_textcoords).xyz;
 
-   vec3 lightDir = normalize(_Light.pos - positionColor);
+   vec3 finalLighting = vec3(0.0);
 
-   vec3 lighting = blinnPhong(normalColor, positionColor, lightDir);
-   vec3 finalLighting = _Light.color * ((_Material.ambientK + lighting));
+   for (int i = 0; i < lightsLength; i++)
+   {
+		vec3 lightDir = normalize(_Lights[i].pos - positionColor);
 
-   fragColor3 = vec4(finalLighting + prevLightPassColor, 1.0);
+		vec3 lighting = blinnPhong(normalColor, positionColor, lightDir);
+		finalLighting += _Lights[i].color * ((_Material.ambientK + lighting));
+   }
+
+   fragColor3 = vec4(1.0, 0.0, 1.0, 1.0);
 }

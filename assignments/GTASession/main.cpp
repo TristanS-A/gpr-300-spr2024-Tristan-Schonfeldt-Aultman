@@ -164,94 +164,79 @@ Material currMat = { 0.0, 1.0, 1.0, 128 };
 //Light sphere
 ew::Mesh sphere;
 
-void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
+void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt)
 {
-	//Pipeline defenitions
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
-	glClear(GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
-
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
-
-	//GFX Pass
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	for (int i = 0; i < 3; i++)
 	{
-		for (int j = 0; j < 300; j++)
+		for (int i = 0; i < 10; i++)
 		{
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, tex);
+			for (int j = 0; j < 10; j++)
+			{
+				modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
 
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, normalMap);
+				shader.use();
+				shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+				shader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 0, j * 2.0f)));
+				shader.setInt("_MainTex", 0);
 
-			shader.use();
-			modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
-			shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
-			shader.setInt("_MainTex", 0);
-			shader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 0, j * 2.0f)));
-			model.draw();
+				model.draw();
+			}
 		}
 	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+void drawAndAddLights(ew::Shader lightingShader, ew::Shader lightVisShader)
+{
 	srand(0);
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < 10; i++)
 	{
-		for (int j = 0; j < 30; j++)
+		for (int j = 0; j < 10; j++)
 		{
-			glEnable(GL_DEPTH_TEST);
-
 			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
+			glm::vec3 lightPos = glm::vec3(i * 2.0f, 5, j * 2.0f);
 
 			lightVisShader.use();
 			lightVisShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 			lightVisShader.setVec3("_Color", randColor);
-			lightVisShader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 5, j * 2.0f)));
+			lightVisShader.setMat4("_Model", glm::translate(lightPos));
 			sphere.draw();
 
-			glBindVertexArray(fullscreenQuad.vao);
-			glDisable(GL_DEPTH_TEST);
-
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, framebuffer.color);
-
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, framebuffer.position);
-
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
-
-			glActiveTexture(GL_TEXTURE3);
-			glBindTexture(GL_TEXTURE_2D, framebuffer.lighting);
-
 			lightingShader.use();
-			lightingShader.setInt("_PositionTex", 1);
-			lightingShader.setInt("_NormalTex", 2);
-			lightingShader.setInt("_PrevLightPass", 3);
-			lightingShader.setVec3("_CamPos", camera.position);
-			lightingShader.setVec3("_Light.color", randColor);
-			lightingShader.setVec3("_Light.pos", glm::vec3(i * 2.0f, 5, j * 2.0f));
-
-			lightingShader.setFloat("_Material.ambientK", currMat.ambientK);
-			lightingShader.setFloat("_Material.diffuseK", currMat.diffuseK);
-			lightingShader.setFloat("_Material.specularK", currMat.specularK);
-			lightingShader.setFloat("_Material.shininess", currMat.shininess);
-
-			glDrawArrays(GL_TRIANGLES, 0, 6);
+			lightingShader.setVec3("_Lights[" + std::to_string(i + j) + "].color", randColor);
+			lightingShader.setVec3("_Lights[" + std::to_string(i + j) + "].pos", lightPos);
 		}
 	}
+}
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+void calculateLighting(ew::Shader lightingShader)
+{
 	glBindVertexArray(fullscreenQuad.vao);
 
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
+
+	lightingShader.use();
+	lightingShader.setInt("_PositionTex", 0);
+	lightingShader.setInt("_NormalTex", 1);
+	lightingShader.setVec3("_CamPos", camera.position);
+
+	lightingShader.setFloat("_Material.ambientK", currMat.ambientK);
+	lightingShader.setFloat("_Material.diffuseK", currMat.diffuseK);
+	lightingShader.setFloat("_Material.specularK", currMat.specularK);
+	lightingShader.setFloat("_Material.shininess", currMat.shininess);
+
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void applyGeoShader(ew::Shader geoShader)
+{
 	//GFX Pass
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
 
 	glActiveTexture(GL_TEXTURE0);
@@ -263,13 +248,36 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.lights);
 
-	postProcessShader.use();
-	postProcessShader.setInt("_Albedo", 0);
-	postProcessShader.setInt("_LightingTex", 1);
-	postProcessShader.setInt("_Lights", 2);
+	geoShader.use();
+	geoShader.setInt("_Albedo", 0);
+	geoShader.setInt("_LightingTex", 1);
+	geoShader.setInt("_Lights", 2);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
+}
+
+void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
+{	
+	//Pipeline defenitions
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+
+
+	//GFX Pass
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	renderSuzannes(shader, tex, modelTransform, model, dt);
+
+	//drawAndAddLights(lightingShader, lightVisShader);
+
+	//calculateLighting(lightingShader);
+
+	//applyGeoShader(postProcessShader);
 }
 
 int main() {
@@ -323,7 +331,16 @@ int main() {
 
 		//RENDER
 		camController.move(window, &camera, deltaTime);
+
+		// deferred; render all geo data of scene (albedo, position, normla)
 		render(litShader, lightingShaderPass, lightVisShader, postProcessShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
+
+		// postprocess; render blinnphong
+		// add lighting data
+
+		// forward render spheres
+		// blit depth from gbuffer
+
 		drawUI();
 
 		glfwSwapBuffers(window);

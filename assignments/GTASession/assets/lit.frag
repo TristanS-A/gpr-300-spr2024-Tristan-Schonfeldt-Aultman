@@ -13,8 +13,8 @@ layout (location = 1) out vec4 fragColor1;
 layout (location = 2) out vec4 fragColor2;
 
 uniform sampler2D _MainTex;
-uniform sampler2D _NormalMap;
-uniform vec3 _EyePos;
+//uniform sampler2D _NormalMap;
+//uniform vec3 _EyePos;
 
 //Light source
 //uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
