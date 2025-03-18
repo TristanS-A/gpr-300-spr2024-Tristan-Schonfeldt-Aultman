@@ -164,6 +164,11 @@ Material currMat = { 0.0, 1.0, 1.0, 128 };
 //Light sphere
 ew::Mesh sphere;
 
+//Light data arrays
+int lightsLength = 100;
+glm::vec3 lightsPos[100];
+glm::vec3 lightsCol[100];
+
 void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
@@ -189,11 +194,16 @@ void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform
 			}
 		}
 	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void drawAndAddLights(ew::Shader lightingShader, ew::Shader lightVisShader)
+void calculateLighting(ew::Shader lightingShader)
 {
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
+	glBindVertexArray(fullscreenQuad.vao);
+
 	srand(0);
+	lightingShader.use();
 	for (int i = 0; i < 10; i++)
 	{
 		for (int j = 0; j < 10; j++)
@@ -201,22 +211,13 @@ void drawAndAddLights(ew::Shader lightingShader, ew::Shader lightVisShader)
 			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
 			glm::vec3 lightPos = glm::vec3(i * 2.0f, 5, j * 2.0f);
 
-			lightVisShader.use();
-			lightVisShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
-			lightVisShader.setVec3("_Color", randColor);
-			lightVisShader.setMat4("_Model", glm::translate(lightPos));
-			sphere.draw();
-
-			lightingShader.use();
 			lightingShader.setVec3("_Lights[" + std::to_string(i + j) + "].color", randColor);
 			lightingShader.setVec3("_Lights[" + std::to_string(i + j) + "].pos", lightPos);
+
+			lightsPos[i] = lightPos;
+			lightsCol[i] = randColor;
 		}
 	}
-}
-
-void calculateLighting(ew::Shader lightingShader)
-{
-	glBindVertexArray(fullscreenQuad.vao);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
@@ -224,7 +225,6 @@ void calculateLighting(ew::Shader lightingShader)
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
 
-	lightingShader.use();
 	lightingShader.setInt("_PositionTex", 0);
 	lightingShader.setInt("_NormalTex", 1);
 	lightingShader.setVec3("_CamPos", camera.position);
@@ -235,6 +235,7 @@ void calculateLighting(ew::Shader lightingShader)
 	lightingShader.setFloat("_Material.shininess", currMat.shininess);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void applyGeoShader(ew::Shader geoShader)
@@ -264,6 +265,21 @@ void applyGeoShader(ew::Shader geoShader)
 	glBindVertexArray(0);
 }
 
+void renderDebugLights(ew::Shader lightVisShader)
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	lightVisShader.use();
+	lightVisShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+
+	for (int i = 0; i < lightsLength; i++)
+	{
+		lightVisShader.setVec3("_Color", lightsCol[i]);
+		lightVisShader.setMat4("_Model", glm::translate(lightsPos[i]));
+		sphere.draw();
+	}
+}
+
 void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
 {	
 	//Pipeline defenitions
@@ -280,11 +296,11 @@ void render(ew::Shader shader, ew::Shader lightingShader, ew::Shader lightVisSha
 
 	renderSuzannes(shader, tex, modelTransform, model, dt);
 
-	drawAndAddLights(lightingShader, lightVisShader);
-
 	calculateLighting(lightingShader);
 
 	applyGeoShader(postProcessShader);
+
+	renderDebugLights(lightVisShader);
 }
 
 int main() {
