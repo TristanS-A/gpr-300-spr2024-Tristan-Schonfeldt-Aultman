@@ -119,6 +119,50 @@ struct FrameBuffer
 	}
 } framebuffer;
 
+//Depth buffer for shadow map
+struct DebugLightFrameBuffer
+{
+	GLuint fbo;
+	GLuint color;
+	GLuint depth;
+
+	//Initiates and generates fram buffer for shadow map
+	void init()
+	{
+		//Bind framebuffer
+		glGenFramebuffers(1, &fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+		//Create color0 texture attachment
+		glGenTextures(1, &color);
+		glBindTexture(GL_TEXTURE_2D, color);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenWidth, screenHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		//Bind color0 attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
+
+		//Create depth texture attachment
+		glGenTextures(1, &depth);
+		glBindTexture(GL_TEXTURE_2D, depth);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, screenWidth, screenHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		//Bind depth texture attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth, 0);
+
+		//Check if frame buffer was created
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		{
+			printf("Failed to bind framebuffer");
+		}
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+} lightVolumeFBO;
+
 struct Material
 {
 	float ambientK = 0.4;
@@ -139,13 +183,15 @@ glm::vec3 lightVec = { 2.0f, 20.0f, -2.0f };
 //Material info
 Material currMat = { 0.0, 1.0, 1.0, 128 };
 
-//Light sphere
+//Light spheres
 ew::Mesh sphere;
+ew::Mesh debugSphere;
 
 //Light data arrays
 int lightsLength = 100;
 glm::vec3 lightsPos[100];
 glm::vec3 lightsCol[100];
+float lightRadius = 4;
 
 void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt)
 {
@@ -181,14 +227,14 @@ void calculateLighting(ew::Shader lightingShader)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(fullscreenQuad.vao);
 
-	srand(0);
+	srand(2);
 	lightingShader.use();
 	for (int i = 0; i < 10; i++)
 	{
 		for (int j = 0; j < 10; j++)
 		{
 			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
-			glm::vec3 lightPos = glm::vec3(i * 2.0f, 5, j * 2.0f);
+			glm::vec3 lightPos = glm::vec3(i * 2.0f, 2, j * 2.0f);
 
 			lightingShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].color", randColor);
 			lightingShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].pos", lightPos);
@@ -217,6 +263,59 @@ void calculateLighting(ew::Shader lightingShader)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void renderLightVolumes(ew::Shader lighhtVolumeShader)
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeFBO.fbo);
+
+	//GFX Pass
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE); //Additive blending
+	glCullFace(GL_FRONT); //Front face culling - we want to render back faces so that the light volumes don't disappear when we enter them.
+	glDepthMask(GL_FALSE); //Disable writing to depth buffer
+
+	lighhtVolumeShader.use();
+	lighhtVolumeShader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.color);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
+
+	lighhtVolumeShader.setInt("_Albedo", 0);
+	lighhtVolumeShader.setInt("_PositionTex", 1);
+	lighhtVolumeShader.setInt("_NormalTex", 2);
+
+	lighhtVolumeShader.setFloat("_Material.ambientK", currMat.ambientK);
+	lighhtVolumeShader.setFloat("_Material.diffuseK", currMat.diffuseK);
+	lighhtVolumeShader.setFloat("_Material.specularK", currMat.specularK);
+	lighhtVolumeShader.setFloat("_Material.shininess", currMat.shininess);
+
+	for (int i = 0; i < lightsLength; i++)
+	{
+		lighhtVolumeShader.setVec3("_CamPos", camera.position);
+
+		lighhtVolumeShader.setVec3("_Light.color", lightsCol[i]);
+		lighhtVolumeShader.setFloat("_Light.radius", lightRadius);
+		lighhtVolumeShader.setVec3("_Light.pos", lightsPos[i]);
+
+		lighhtVolumeShader.setMat4("_Model", glm::translate(lightsPos[i]));
+		sphere.draw();
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	glCullFace(GL_BACK);
+	glDisable(GL_BLEND);
+	glDepthMask(GL_TRUE);
+}
+
 void applyGeoShader(ew::Shader geoShader)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -228,41 +327,16 @@ void applyGeoShader(ew::Shader geoShader)
 
 	glBindVertexArray(fullscreenQuad.vao);
 
-	srand(0);
-	geoShader.use();
-	for (int i = 0; i < 10; i++)
-	{
-		for (int j = 0; j < 10; j++)
-		{
-			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
-			glm::vec3 lightPos = glm::vec3(i * 2.0f, 5, j * 2.0f);
-
-			geoShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].color", randColor);
-			geoShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].pos", lightPos);
-
-			lightsPos[i * 10 + j] = lightPos;
-			lightsCol[i * 10 + j] = randColor;
-		}
-	}
-
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.color);
 
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
+	glBindTexture(GL_TEXTURE_2D, lightVolumeFBO.color);
 
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
+	geoShader.use();
 
 	geoShader.setInt("_Albedo", 0);
-	geoShader.setInt("_PositionTex", 1);
-	geoShader.setInt("_NormalTex", 2);
-	geoShader.setVec3("_CamPos", camera.position);
-
-	geoShader.setFloat("_Material.ambientK", currMat.ambientK);
-	geoShader.setFloat("_Material.diffuseK", currMat.diffuseK);
-	geoShader.setFloat("_Material.specularK", currMat.specularK);
-	geoShader.setFloat("_Material.shininess", currMat.shininess);
+	geoShader.setInt("_Lighting", 1);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
@@ -275,6 +349,7 @@ void renderDebugLights(ew::Shader lightVisShader)
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer.fbo);
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	lightVisShader.use();
@@ -284,11 +359,29 @@ void renderDebugLights(ew::Shader lightVisShader)
 	{
 		lightVisShader.setVec3("_Color", lightsCol[i]);
 		lightVisShader.setMat4("_Model", glm::translate(lightsPos[i]));
-		sphere.draw();
+		debugSphere.draw();
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void setLightData()
+{
+	srand(0);
+	for (int i = 0; i < 10; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
+			glm::vec3 lightPos = glm::vec3(i * 2.0f, 2, j * 2.0f);
+
+			lightsPos[i * 10 + j] = lightPos;
+			lightsCol[i * 10 + j] = randColor;
+		}
 	}
 }
 
-void render(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
+void render(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Shader lightVolumeShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
 {	
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -303,6 +396,8 @@ void render(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcess
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	renderSuzannes(shader, tex, modelTransform, model, dt);
+
+	renderLightVolumes(lightVolumeShader);
 
 	applyGeoShader(postProcessShader);
 
@@ -323,6 +418,7 @@ int main() {
 	//ew::Shader lightingShaderPass = ew::Shader("assets/lightingPass.vert", "assets/lightingPass.frag");
 	ew::Shader lightVisShader = ew::Shader("assets/lightVis.vert", "assets/lightVis.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/geoShader.vert", "assets/geoShader.frag");
+	ew::Shader lightVolumeShader = ew::Shader("assets/lightVolume.vert", "assets/lightVolume.frag");
 
 	ew::Model suzanne = ew::Model("assets/suzanne.obj");
 
@@ -330,8 +426,12 @@ int main() {
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 
 	framebuffer.init();
+	lightVolumeFBO.init();
 
-	sphere.load(ew::createSphere(0.5f, 4));
+	setLightData();
+
+	sphere.load(ew::createSphere(4, 4));
+	debugSphere.load(ew::createSphere(0.5f, 4));
 
 	//Initialize fullscreen quad
 	glGenVertexArrays(1, &fullscreenQuad.vao);
@@ -362,7 +462,7 @@ int main() {
 		camController.move(window, &camera, deltaTime);
 
 		// deferred; render all geo data of scene (albedo, position, normla)
-		render(litShader, lightVisShader, postProcessShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
+		render(litShader, lightVisShader, postProcessShader, lightVolumeShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
 
 		// postprocess; render blinnphong
 		// add lighting data
@@ -388,6 +488,7 @@ void drawUI() {
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)lightVolumeFBO.color, ImVec2(800, 600));
 
 	ImGui::End();
 
