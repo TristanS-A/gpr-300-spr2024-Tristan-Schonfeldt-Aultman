@@ -422,7 +422,7 @@ int main() {
 
 	ew::Model suzanne = ew::Model("assets/suzanne.obj");
 
-	GLint Rock_Color = ew::loadTexture("assets/Rock_Color.png");
+	GLint Rock_Color = ew::loadTexture("assets/snow.png");
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 
 	framebuffer.init();
@@ -430,7 +430,7 @@ int main() {
 
 	setLightData();
 
-	sphere.load(ew::createSphere(4, 4));
+	sphere.load(ew::createSphere(4, 10));
 	debugSphere.load(ew::createSphere(0.5f, 4));
 
 	//Initialize fullscreen quad
