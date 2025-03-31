@@ -56,6 +56,7 @@ struct FrameBuffer
 	GLuint color;
 	GLuint position;
 	GLuint normal;
+	GLuint material;
 	GLuint depth;
 
 	//Initiates and generates fram buffer for shadow map
@@ -95,9 +96,19 @@ struct FrameBuffer
 		//Bind color1 attachment
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, normal, 0);
 
+		//Create material texture attachment
+		glGenTextures(1, &material);
+		glBindTexture(GL_TEXTURE_2D, material);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, screenWidth, screenHeight, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		//Bind material attachment
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, material, 0);
+
 		//Configure drawing to multiple buffers
-		GLuint arr[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-		glDrawBuffers(3, arr);
+		GLuint arr[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+		glDrawBuffers(4, arr);
 
 		//Create depth texture attachment
 		glGenTextures(1, &depth);
@@ -210,6 +221,11 @@ void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform
 				modelTransform.rotation = glm::rotate(modelTransform.rotation, dt, glm::vec3(0.0, 1.0, 0.0));
 
 				shader.use();
+				shader.setFloat("_Material.ambientK", currMat.ambientK);
+				shader.setFloat("_Material.diffuseK", currMat.diffuseK);
+				shader.setFloat("_Material.specularK", currMat.specularK);
+				shader.setFloat("_Material.shininess", currMat.shininess);
+
 				shader.setMat4("camera_viewProj", camera.projectionMatrix() * camera.viewMatrix());
 				shader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 0, j * 2.0f)));
 				shader.setInt("_MainTex", 0);
@@ -254,11 +270,6 @@ void calculateLighting(ew::Shader lightingShader)
 	lightingShader.setInt("_NormalTex", 1);
 	lightingShader.setVec3("_CamPos", camera.position);
 
-	lightingShader.setFloat("_Material.ambientK", currMat.ambientK);
-	lightingShader.setFloat("_Material.diffuseK", currMat.diffuseK);
-	lightingShader.setFloat("_Material.specularK", currMat.specularK);
-	lightingShader.setFloat("_Material.shininess", currMat.shininess);
-
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -288,14 +299,13 @@ void renderLightVolumes(ew::Shader lighhtVolumeShader)
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
 
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.material);
+
 	lighhtVolumeShader.setInt("_Albedo", 0);
 	lighhtVolumeShader.setInt("_PositionTex", 1);
 	lighhtVolumeShader.setInt("_NormalTex", 2);
-
-	lighhtVolumeShader.setFloat("_Material.ambientK", currMat.ambientK);
-	lighhtVolumeShader.setFloat("_Material.diffuseK", currMat.diffuseK);
-	lighhtVolumeShader.setFloat("_Material.specularK", currMat.specularK);
-	lighhtVolumeShader.setFloat("_Material.shininess", currMat.shininess);
+	lighhtVolumeShader.setInt("_MaterialTex", 3);
 
 	for (int i = 0; i < lightsLength; i++)
 	{
@@ -485,10 +495,16 @@ void drawUI() {
 
 	ImGui::Begin("Settings");
 
+	ImGui::SliderFloat("AmbientK", &currMat.ambientK, 0.0, 1.0);
+	ImGui::SliderFloat("DiffuseK", &currMat.diffuseK, 0.0, 1.0);
+	ImGui::SliderFloat("SpecularK", &currMat.specularK, 0.0, 1.0);
+	ImGui::SliderFloat("Shininess", &currMat.shininess, 2.0, 1024.0);
+
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)lightVolumeFBO.color, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)framebuffer.material, ImVec2(800, 600));
 
 	ImGui::End();
 

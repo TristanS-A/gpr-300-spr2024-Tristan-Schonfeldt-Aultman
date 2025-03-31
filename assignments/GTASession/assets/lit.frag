@@ -11,14 +11,19 @@ in Surface
 layout (location = 0) out vec4 fragColor0;
 layout (location = 1) out vec4 fragColor1;
 layout (location = 2) out vec4 fragColor2;
+layout (location = 3) out vec4 fragColor3;
 
 uniform sampler2D _MainTex;
-//uniform sampler2D _NormalMap;
-//uniform vec3 _EyePos;
 
-//Light source
-//uniform vec3 _LightDir = vec3(0.0, 1.0, 0.0);
-//uniform vec3 _LightCol = vec3(1.0, 1.0, 1.0);
+struct Material 
+{
+	float ambientK;
+	float diffuseK;
+	float specularK;
+	float shininess;
+};
+
+uniform Material _Material;
 
 void main() 
 {
@@ -31,4 +36,5 @@ void main()
 	fragColor0 = vec4(objectColor0, 1.0);
 	fragColor1 = vec4(position, 1.0);
 	fragColor2 = vec4(normals, 1.0);
+	fragColor3 = vec4(_Material.ambientK, _Material.diffuseK, _Material.specularK, _Material.shininess);
 }

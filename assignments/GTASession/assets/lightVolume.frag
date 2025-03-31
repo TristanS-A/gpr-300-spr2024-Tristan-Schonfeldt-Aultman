@@ -5,6 +5,7 @@ layout (location = 0) out vec4 fragColor0;
 uniform sampler2D _Albedo;
 uniform sampler2D _PositionTex;
 uniform sampler2D _NormalTex;
+uniform sampler2D _MaterialTex;
 
 struct Light 
 {
@@ -23,11 +24,9 @@ struct Material
 	float shininess;
 };
 
-uniform Material _Material;
-
 uniform vec3 _CamPos;
 
-vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal)
+vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal, vec2 UV)
 {
 	//Normalize inputs
 	vec3 viewDir = normalize(_CamPos - worldPos);
@@ -37,8 +36,10 @@ vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal)
 	float nDotL = max(dot(normal, lightDir), 0.0);
 	float nDotH = max(dot(normal, halfDir), 0.0);
 
-	vec3 diffuse = vec3(nDotL * _Material.diffuseK);
-	vec3 specular = vec3(pow(nDotH, _Material.shininess) * _Material.specularK);
+	vec4 materialInfo = texture(_MaterialTex, UV).rgba;
+
+	vec3 diffuse = vec3(nDotL * materialInfo.g);
+	vec3 specular = vec3(pow(nDotH, materialInfo.a) * materialInfo.b);
 
 	return (diffuse + specular);
 }
@@ -61,6 +62,6 @@ void main()
 
 	float attentuation = calculateAttentuation(length(toLightVec), _Light.radius);
 
-	vec3 lightColor = calculateLighting(normalizedLightDir, worldPos, normal) * _Light.color * attentuation;
+	vec3 lightColor = calculateLighting(normalizedLightDir, worldPos, normal, UV) * _Light.color * attentuation;
 	fragColor0 = vec4(lightColor * albedo, 1.0);
 }
