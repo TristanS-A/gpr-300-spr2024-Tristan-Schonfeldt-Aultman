@@ -24,12 +24,13 @@ struct Material
 
 uniform vec3 _CamPos;
 
+uniform float _Absalom;
+
 const float PI = 3.1415926;
 
 //Caching dots
-float VdotN = 0.0;
+float NdotV = 0.0;
 float NdotL = 0.0;
-float LdotN = 0.0;
 float NdotH = 0.0;
 
 vec3 F() { return vec3(1.0); };
@@ -46,7 +47,7 @@ float D(float roughness)
 vec3 cookTolorrance(vec3 fresnel, float roughness)
 {
 	vec3 numerator = D(roughness) * fresnel * G();
-	float denominator = 4.0 * VdotN * LdotN;
+	float denominator = 4.0 * NdotV * NdotL;
 
 	return numerator / denominator;
 }
@@ -93,10 +94,9 @@ vec3 CalculateOutgoingLight(vec3 fragPos, vec3 albedo, vec3 normal, vec2 UV)
 	vec3 viewDir = normalize(_CamPos - fragPos);
 	vec3 halfDir = normalize(lightDir + viewDir);
 
-	NdotL = dot(lightDir, normal);
-	LdotN = dot(lightDir, normal);
-	NdotH = max(dot(normal, halfDir), 0.0);
-	VdotN = max(dot(viewDir, normal), 0.0);
+	NdotL = max(dot(lightDir, normal), _Absalom);
+	NdotH = max(dot(normal, halfDir), _Absalom);
+	NdotV = max(dot(viewDir, normal), _Absalom);
 
 	vec3 bdrf = BDRF(incomingToLight, fragPos, albedo, normal, UV);
 

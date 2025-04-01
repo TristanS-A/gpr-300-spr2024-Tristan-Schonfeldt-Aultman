@@ -15,7 +15,7 @@ uniform float _AffectIntensity;
 void main() 
 {
     float scanline = sin((vs_textcoords.y - _Time * _ScrollSpeed) * 1.0/_ScanlineHeight);
-    vec3 crtColor = vec3(1.0) * scanline * _ScanlineIntensity;
+    vec3 crtColor = vec3(0.0, 0.0, 1.0) * scanline * _ScanlineIntensity;
 
     vec2 grainSeed = vec2(12.9898, 78.233) + _Time * 0.1;
     float grain = fract(sin(dot(vs_textcoords, grainSeed)) * 43758.5453);

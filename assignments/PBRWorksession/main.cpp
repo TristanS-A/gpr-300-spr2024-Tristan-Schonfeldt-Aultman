@@ -202,11 +202,13 @@ glm::vec3 lightsPos[100];
 glm::vec3 lightsCol[100];
 float lightRadius = 4;
 
+float lightingAbsalom = 0.03;
+
 void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.fbo);
 
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	{
 		glActiveTexture(GL_TEXTURE0);
@@ -275,7 +277,7 @@ void renderLightVolumes(ew::Shader lighhtVolumeShader)
 	glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeFBO.fbo);
 
 	//GFX Pass
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glEnable(GL_BLEND);
@@ -302,6 +304,7 @@ void renderLightVolumes(ew::Shader lighhtVolumeShader)
 	lighhtVolumeShader.setInt("_PositionTex", 1);
 	lighhtVolumeShader.setInt("_NormalTex", 2);
 	lighhtVolumeShader.setInt("_MaterialTex", 3);
+	lighhtVolumeShader.setFloat("_Absalom", lightingAbsalom);
 
 	for (int i = 0; i < lightsLength; i++)
 	{
@@ -494,6 +497,7 @@ void drawUI() {
 
 	ImGui::SliderFloat("Metalic", &currMat.metalic, 0.0, 1.0);
 	ImGui::SliderFloat("Roughness", &currMat.roughness, 0.0, 1.0);
+	ImGui::SliderFloat("Lighting Absalom", &lightingAbsalom, 0.0, 0.1);
 
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
