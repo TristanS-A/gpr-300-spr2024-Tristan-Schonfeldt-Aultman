@@ -6,6 +6,7 @@ uniform sampler2D _Albedo;
 uniform sampler2D _PositionTex;
 uniform sampler2D _NormalTex;
 uniform sampler2D _MaterialTex;
+uniform sampler2D _ShadowMap;
 
 struct Light 
 {
@@ -15,6 +16,7 @@ struct Light
 };
 
 uniform Light _Light;
+uniform Light _ShadowLight;
 
 struct Material 
 {
@@ -25,8 +27,12 @@ struct Material
 };
 
 uniform vec3 _CamPos;
+uniform mat4 _LightViewProj;
 
-vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal, vec2 UV)
+const int PCFFactor = 1;
+const float ShadowBias = 0.01;
+
+vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal, vec2 UV, vec4 matInfo)
 {
 	//Normalize inputs
 	vec3 viewDir = normalize(_CamPos - worldPos);
@@ -36,12 +42,46 @@ vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal, vec2 UV)
 	float nDotL = max(dot(normal, lightDir), 0.0);
 	float nDotH = max(dot(normal, halfDir), 0.0);
 
-	vec4 materialInfo = texture(_MaterialTex, UV).rgba;
-
-	vec3 diffuse = vec3(nDotL * materialInfo.g);
-	vec3 specular = vec3(pow(nDotH, materialInfo.a) * materialInfo.b);
+	vec3 diffuse = vec3(nDotL * matInfo.g);
+	vec3 specular = vec3(pow(nDotH, matInfo.a) * matInfo.b);
 
 	return (diffuse + specular);
+}
+
+//Calculates shadows using shadow map
+float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
+{
+	//Perspective devide -> normalized device coords
+	vec3 projectionCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+
+	//Map to 0-1
+	projectionCoords = (projectionCoords * 0.5) + 0.5;
+
+	////Way to get rid of plane out of camera view issues (over sampling) for shadows
+	if (projectionCoords.z  <= 0.0 || projectionCoords.z > 1.0)
+	{
+		return 0.0;
+	}
+
+	float currentDepth = projectionCoords.z;
+
+	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), ShadowBias);  //Scales bias to light angle
+
+	//Calculates PCF
+	float shadow = 0.0;
+	vec2 texelSize = 1.0 / textureSize(_ShadowMap, 0);
+	int num = 0;
+	for (int x = -PCFFactor; x < PCFFactor; ++x)
+	{
+		for (int y = -PCFFactor; y < PCFFactor; ++y)
+		{
+			float pcfDepth = texture(_ShadowMap, projectionCoords.xy + vec2(x, y) * texelSize).r;
+			shadow += ((currentDepth - bias) > pcfDepth) ? 1.0 : 0.0;
+			num++;
+		}
+	}
+
+	return shadow / (PCFFactor * 2 * PCFFactor * 2);
 }
 
 float calculateAttentuation(float dist, float radius)
@@ -56,12 +96,16 @@ void main()
 	vec3 normal = texture(_NormalTex, UV).rgb;
 	vec3 worldPos = texture(_PositionTex, UV).rgb;
 	vec3 albedo = texture(_Albedo, UV).rgb;
+	vec4 materialInfo = texture(_MaterialTex, UV).rgba;
 
 	vec3 toLightVec = _Light.pos - worldPos;
 	vec3 normalizedLightDir = normalize(toLightVec);
 
 	float attentuation = calculateAttentuation(length(toLightVec), _Light.radius);
 
-	vec3 lightColor = calculateLighting(normalizedLightDir, worldPos, normal, UV) * _Light.color * attentuation;
+	vec3 shadowLightDir = normalize(_ShadowLight.pos - worldPos);
+	float shadow = shadowCalculations(_LightViewProj * vec4(worldPos, 1.0), shadowLightDir, normal);
+
+	vec3 lightColor = calculateLighting(normalizedLightDir, worldPos, normal, UV, materialInfo) * _Light.color * attentuation * (1.0 - shadow);
 	fragColor0 = vec4(lightColor * albedo, 1.0);
 }

@@ -28,6 +28,8 @@ void drawUI();
 //Global state
 int screenWidth = 1080;
 int screenHeight = 720;
+int shadowScreenWidth = 512;
+int shadowScreenHeight = 512;
 float prevFrameTime;
 float deltaTime;
 
@@ -131,7 +133,7 @@ struct FrameBuffer
 } framebuffer;
 
 //Depth buffer for shadow map
-struct DebugLightFrameBuffer
+struct LightVolumeFrameBuffer
 {
 	GLuint fbo;
 	GLuint color;
@@ -174,6 +176,50 @@ struct DebugLightFrameBuffer
 	}
 } lightVolumeFBO;
 
+//Depth buffer for shadow map
+struct DepthBuffer
+{
+	GLuint fbo;
+	GLuint depth;
+
+	//Initiates and generates fram buffer for shadow map
+	void init()
+	{
+		//Bind framebuffer
+		glGenFramebuffers(1, &fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+		//Create depth texture attachment
+		glGenTextures(1, &depth);
+		glBindTexture(GL_TEXTURE_2D, depth);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+			shadowScreenWidth, shadowScreenHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		//Fixes out of camera view issues (over sampling) for shadows by having no texture wrapping
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+		//Bind depth texture attachment
+		glBindFramebuffer(GL_FRAMEBUFFER, depth);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth, 0);
+		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
+
+		//Check if frame buffer was created
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		{
+			printf("Failed to bind framebuffer");
+		}
+
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+} depthBuffer;
+
 struct Material
 {
 	float ambientK = 0.4;
@@ -188,8 +234,11 @@ ew::CameraController camController;
 ew::Transform suzanneTransform;
 ew::Transform lightSphereTransform;
 
+//Plane stuff
+ew::Mesh plane;
+
 //Light info
-glm::vec3 lightVec = { 2.0f, 20.0f, -2.0f };
+glm::vec3 lightVec = { 8.0f, 20.0f, 8.0f };
 
 //Material info
 Material currMat = { 0.0, 1.0, 1.0, 128 };
@@ -235,16 +284,30 @@ void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform
 		}
 	}
 
+	shader.setMat4("_Model", glm::translate(glm::vec3(0.0f, -2.0f, 0.0f)));
+
+	plane.draw();
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void calculateLighting(ew::Shader lightingShader)
+void calculateLighting(ew::Shader lightingShader, const glm::highp_mat4 shadowLightViewProj)
 {
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(fullscreenQuad.vao);
 
 	srand(2);
 	lightingShader.use();
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, depthBuffer.depth);
+
+	lightingShader.setInt("_ShadowMap", 0);
+	lightingShader.setVec3("_ShadowLight.color", glm::vec3(1.0));
+	lightingShader.setVec3("_ShadowLight.pos", lightVec);
+	lightingShader.setMat4("_LightViewProj", shadowLightViewProj);
+
 	for (int i = 0; i < 10; i++)
 	{
 		for (int j = 0; j < 10; j++)
@@ -274,7 +337,7 @@ void calculateLighting(ew::Shader lightingShader)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void renderLightVolumes(ew::Shader lighhtVolumeShader)
+void renderLightVolumes(ew::Shader lighhtVolumeShader, const glm::highp_mat4 shadowLightViewProj)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeFBO.fbo);
 
@@ -302,10 +365,18 @@ void renderLightVolumes(ew::Shader lighhtVolumeShader)
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, framebuffer.material);
 
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_2D, depthBuffer.depth);
+
 	lighhtVolumeShader.setInt("_Albedo", 0);
 	lighhtVolumeShader.setInt("_PositionTex", 1);
 	lighhtVolumeShader.setInt("_NormalTex", 2);
 	lighhtVolumeShader.setInt("_MaterialTex", 3);
+	lighhtVolumeShader.setInt("_ShadowMap", 4);
+
+	lighhtVolumeShader.setVec3("_ShadowLight.color", glm::vec3(1.0));
+	lighhtVolumeShader.setVec3("_ShadowLight.pos", lightVec);
+	lighhtVolumeShader.setMat4("_LightViewProj", shadowLightViewProj);
 
 	for (int i = 0; i < lightsLength; i++)
 	{
@@ -383,7 +454,7 @@ void setLightData()
 		for (int j = 0; j < 10; j++)
 		{
 			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
-			glm::vec3 lightPos = glm::vec3(i * 2.0f, 2, j * 2.0f);
+			glm::vec3 lightPos = glm::vec3(i * 2.0f, 1.5, j * 2.0f);
 
 			lightsPos[i * 10 + j] = lightPos;
 			lightsCol[i * 10 + j] = randColor;
@@ -391,7 +462,43 @@ void setLightData()
 	}
 }
 
-void render(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Shader lightVolumeShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
+void renderShadowMap(ew::Shader shadowMapShader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt, const glm::highp_mat4 shadowLightViewProj)
+{
+	//Pipeline defenitions
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glCullFace(GL_BACK);
+	//glCullFace(GL_FRONT);  //This line causes shadow issues when suzzane is inside the plane
+
+	//Shadow pass
+	glBindFramebuffer(GL_FRAMEBUFFER, depthBuffer.fbo); //Switches to depth buffer fbo for rendering shadows
+	{
+		//Begin pass by resizing window
+		glViewport(0, 0, shadowScreenWidth, shadowScreenHeight);
+
+		//GFX Pass
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		for (int i = 0; i < 10; i++)
+		{
+			for (int j = 0; j < 10; j++)
+			{
+				shadowMapShader.use();
+				shadowMapShader.setMat4("_Model", glm::translate(glm::vec3(i * 2.0f, 0, j * 2.0f)));
+				shadowMapShader.setMat4("_LightViewProj", shadowLightViewProj);
+
+				model.draw();
+			}
+		}
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0); //Switches back to default framebuffer
+
+	glViewport(0, 0, screenWidth, screenHeight);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glCullFace(GL_BACK);
+}
+
+void MegaRender(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Shader lightVolumeShader, ew::Shader shadowMapShader, ew::Shader planeShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
 {	
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -405,13 +512,26 @@ void render(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcess
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	//Light's view of the scene
+	const auto lightProj = glm::ortho(-15.0f, 15.0f, -15.0f, 15.0f, 0.1f, 100.0f);
+	const auto lightView = glm::lookAt(lightVec, glm::vec3(8.0f, 0.0f, 8.0f), glm::vec3(0.0f, -1.0f, 1.0f));
+	const glm::highp_mat4 shadowLightViewProj = lightProj * lightView;
+
 	renderSuzannes(shader, tex, modelTransform, model, dt);
 
-	renderLightVolumes(lightVolumeShader);
+	renderShadowMap(shadowMapShader, tex, modelTransform, model, dt, shadowLightViewProj);
+
+	renderLightVolumes(lightVolumeShader, shadowLightViewProj);
 
 	applyGeoShader(postProcessShader);
 
 	renderDebugLights(lightVisShader);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tex);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, depthBuffer.depth);
 }
 
 int main() {
@@ -429,14 +549,19 @@ int main() {
 	ew::Shader lightVisShader = ew::Shader("assets/lightVis.vert", "assets/lightVis.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/geoShader.vert", "assets/geoShader.frag");
 	ew::Shader lightVolumeShader = ew::Shader("assets/lightVolume.vert", "assets/lightVolume.frag");
+	ew::Shader shadowShader = ew::Shader("assets/shadow.vert", "assets/shadow.frag");
+	ew::Shader planeShader = ew::Shader("assets/plane.vert", "assets/plane.frag");
 
 	ew::Model suzanne = ew::Model("assets/suzanne.obj");
 
 	GLint Rock_Color = ew::loadTexture("assets/snow.png");
 	GLint rockNormal = ew::loadTexture("assets/Rock_Normal.png");
 
+	plane.load(ew::createPlane(100, 100, 100));
+
 	framebuffer.init();
 	lightVolumeFBO.init();
+	depthBuffer.init();
 
 	setLightData();
 
@@ -472,13 +597,7 @@ int main() {
 		camController.move(window, &camera, deltaTime);
 
 		// deferred; render all geo data of scene (albedo, position, normla)
-		render(litShader, lightVisShader, postProcessShader, lightVolumeShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
-
-		// postprocess; render blinnphong
-		// add lighting data
-
-		// forward render spheres
-		// blit depth from gbuffer
+		MegaRender(litShader, lightVisShader, postProcessShader, lightVolumeShader, shadowShader, planeShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
 
 		drawUI();
 
@@ -505,6 +624,7 @@ void drawUI() {
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)lightVolumeFBO.color, ImVec2(800, 600));
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.material, ImVec2(800, 600));
+	ImGui::Image((ImTextureID)(intptr_t)depthBuffer.depth, ImVec2(shadowScreenWidth, shadowScreenHeight));
 
 	ImGui::End();
 
