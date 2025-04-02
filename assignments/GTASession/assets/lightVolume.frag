@@ -106,6 +106,8 @@ void main()
 	vec3 shadowLightDir = normalize(_ShadowLight.pos - worldPos);
 	float shadow = shadowCalculations(_LightViewProj * vec4(worldPos, 1.0), shadowLightDir, normal);
 
-	vec3 lightColor = calculateLighting(normalizedLightDir, worldPos, normal, UV, materialInfo) * _Light.color * attentuation * (1.0 - shadow);
+	vec3 lighting = calculateLighting(normalizedLightDir, worldPos, normal, UV, materialInfo) + albedo * materialInfo.r;
+
+	vec3 lightColor = lighting * _Light.color * attentuation * (1.0 - shadow);
 	fragColor0 = vec4(lightColor * albedo, 1.0);
 }
