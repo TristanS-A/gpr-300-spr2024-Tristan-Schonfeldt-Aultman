@@ -361,7 +361,7 @@ void renderLightVolumes(ew::Shader lighhtVolumeShader, const glm::highp_mat4 sha
 	glDepthMask(GL_TRUE);
 }
 
-void applyGeoShader(ew::Shader geoShader)
+void combineGeoOutputsAndLighting(ew::Shader combineShader)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -378,10 +378,10 @@ void applyGeoShader(ew::Shader geoShader)
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, lightVolumeFBO.color);
 
-	geoShader.use();
+	combineShader.use();
 
-	geoShader.setInt("_Albedo", 0);
-	geoShader.setInt("_Lighting", 1);
+	combineShader.setInt("_Albedo", 0);
+	combineShader.setInt("_Lighting", 1);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
@@ -462,7 +462,7 @@ void renderShadowMap(ew::Shader shadowMapShader, GLuint tex, ew::Transform& mode
 	glCullFace(GL_BACK);
 }
 
-void MegaRender(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postProcessShader, ew::Shader lightVolumeShader, ew::Shader shadowMapShader, ew::Shader planeShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
+void MegaRender(ew::Shader geoShader, ew::Shader lightVisShader, ew::Shader combineShader, ew::Shader lightVolumeShader, ew::Shader shadowMapShader, ew::Shader planeShader, ew::Model& model, ew::Transform& modelTransform, GLint tex, GLint normalMap, const float dt)
 {	
 	//Pipeline defenitions
 	glEnable(GL_CULL_FACE);
@@ -481,13 +481,13 @@ void MegaRender(ew::Shader shader, ew::Shader lightVisShader, ew::Shader postPro
 	const auto lightView = glm::lookAt(lightVec, glm::vec3(8.0f, 0.0f, 8.0f), glm::vec3(0.0f, -1.0f, 1.0f));
 	const glm::highp_mat4 shadowLightViewProj = lightProj * lightView;
 
-	renderSuzannes(shader, tex, modelTransform, model, dt);
+	renderSuzannes(geoShader, tex, modelTransform, model, dt);
 
 	renderShadowMap(shadowMapShader, tex, modelTransform, model, dt, shadowLightViewProj);
 
 	renderLightVolumes(lightVolumeShader, shadowLightViewProj);
 
-	applyGeoShader(postProcessShader);
+	combineGeoOutputsAndLighting(combineShader);
 
 	renderDebugLights(lightVisShader);
 
@@ -508,10 +508,10 @@ int main() {
 	camera.fov = 60.0f;
 	camera.farPlane = 1000;
 
-	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader geoShader = ew::Shader("assets/geoShader.vert", "assets/geoShader.frag");
 	//ew::Shader lightingShaderPass = ew::Shader("assets/lightingPass.vert", "assets/lightingPass.frag");
 	ew::Shader lightVisShader = ew::Shader("assets/lightVis.vert", "assets/lightVis.frag");
-	ew::Shader postProcessShader = ew::Shader("assets/geoShader.vert", "assets/geoShader.frag");
+	ew::Shader combineShader = ew::Shader("assets/combineShader.vert", "assets/combineShader.frag");
 	ew::Shader lightVolumeShader = ew::Shader("assets/lightVolume.vert", "assets/lightVolume.frag");
 	ew::Shader shadowShader = ew::Shader("assets/shadow.vert", "assets/shadow.frag");
 	ew::Shader planeShader = ew::Shader("assets/plane.vert", "assets/plane.frag");
@@ -561,7 +561,7 @@ int main() {
 		camController.move(window, &camera, deltaTime);
 
 		// deferred; render all geo data of scene (albedo, position, normla)
-		MegaRender(litShader, lightVisShader, postProcessShader, lightVolumeShader, shadowShader, planeShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
+		MegaRender(geoShader, lightVisShader, combineShader, lightVolumeShader, shadowShader, planeShader, suzanne, suzanneTransform, Rock_Color, rockNormal, deltaTime);
 
 		drawUI();
 

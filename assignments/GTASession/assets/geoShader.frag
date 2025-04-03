@@ -1,22 +1,40 @@
 #version 450
 
-out vec4 FragColor;
+in vec3 out_Normal;
+in Surface 
+{
+	vec3 worldPos;
+	vec3 worldNormal;
+	vec2 texcoord;
+} fs_surface;
 
-in vec2 vs_textcoords;
+layout (location = 0) out vec4 fragColor0;
+layout (location = 1) out vec4 fragColor1;
+layout (location = 2) out vec4 fragColor2;
+layout (location = 3) out vec4 fragColor3;
 
-uniform sampler2D _Albedo;
-uniform sampler2D _Lighting;
-uniform sampler2D _MaterialInfo;
+uniform sampler2D _MainTex;
 
-uniform vec3 _CamPos;
+struct Material 
+{
+	float ambientK;
+	float diffuseK;
+	float specularK;
+	float shininess;
+};
+
+uniform Material _Material;
 
 void main() 
 {
-   vec3 objectColor = texture(_Albedo, vs_textcoords).rgb;
-   vec3 lightingColor = texture(_Lighting, vs_textcoords).rgb;
-   vec3 materialInfo = texture(_MaterialInfo, vs_textcoords).rgb;
-   
-   vec3 finalLighting = objectColor * lightingColor;
+	vec3 normal = normalize(fs_surface.worldNormal);
 
-   FragColor = vec4(finalLighting, 1.0);
+	vec3 objectColor0 = texture(_MainTex, fs_surface.texcoord).rgb;
+	vec3 position = vec3(fs_surface.worldPos.xyz);
+	vec3 normals = vec3(normal.xyz);
+
+	fragColor0 = vec4(objectColor0, 1.0);
+	fragColor1 = vec4(position, 1.0);
+	fragColor2 = vec4(normals, 1.0);
+	fragColor3 = vec4(_Material.ambientK, _Material.diffuseK, _Material.specularK, _Material.shininess);
 }
