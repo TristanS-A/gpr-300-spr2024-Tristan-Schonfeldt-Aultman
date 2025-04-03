@@ -237,6 +237,13 @@ ew::Transform lightSphereTransform;
 //Plane stuff
 ew::Mesh plane;
 
+//Debug strruct for shadow
+struct ShadowDebug
+{
+	float bias = 0.0;
+	int pcfFactor = 1.0f;
+} shadowDebug;
+
 //Light info
 glm::vec3 lightVec = { 8.0f, 20.0f, 8.0f };
 
@@ -251,7 +258,7 @@ ew::Mesh debugSphere;
 int lightsLength = 100;
 glm::vec3 lightsPos[100];
 glm::vec3 lightsCol[100];
-float lightRadius = 4;
+float lightRadius = 6;
 
 void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform, ew::Model& model, const float dt)
 {
@@ -291,52 +298,6 @@ void renderSuzannes(ew::Shader shader, GLuint tex, ew::Transform& modelTransform
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void calculateLighting(ew::Shader lightingShader, const glm::highp_mat4 shadowLightViewProj)
-{
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindVertexArray(fullscreenQuad.vao);
-
-	srand(2);
-	lightingShader.use();
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, depthBuffer.depth);
-
-	lightingShader.setInt("_ShadowMap", 0);
-	lightingShader.setVec3("_ShadowLight.color", glm::vec3(1.0));
-	lightingShader.setVec3("_ShadowLight.pos", lightVec);
-	lightingShader.setMat4("_LightViewProj", shadowLightViewProj);
-
-	for (int i = 0; i < 10; i++)
-	{
-		for (int j = 0; j < 10; j++)
-		{
-			glm::vec3 randColor = glm::vec3(rand() % 2, rand() % 2, rand() % 2);
-			glm::vec3 lightPos = glm::vec3(i * 2.0f, 2, j * 2.0f);
-
-			lightingShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].color", randColor);
-			lightingShader.setVec3("_Lights[" + std::to_string(i * 10 + j) + "].pos", lightPos);
-
-			lightsPos[i * 10 + j] = lightPos;
-			lightsCol[i * 10 + j] = randColor;
-		}
-	}
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.position);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, framebuffer.normal);
-
-	lightingShader.setInt("_PositionTex", 0);
-	lightingShader.setInt("_NormalTex", 1);
-	lightingShader.setVec3("_CamPos", camera.position);
-
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
 void renderLightVolumes(ew::Shader lighhtVolumeShader, const glm::highp_mat4 shadowLightViewProj)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, lightVolumeFBO.fbo);
@@ -373,6 +334,9 @@ void renderLightVolumes(ew::Shader lighhtVolumeShader, const glm::highp_mat4 sha
 	lighhtVolumeShader.setInt("_NormalTex", 2);
 	lighhtVolumeShader.setInt("_MaterialTex", 3);
 	lighhtVolumeShader.setInt("_ShadowMap", 4);
+
+	lighhtVolumeShader.setFloat("_ShadowBias", shadowDebug.bias);
+	lighhtVolumeShader.setInt("_PCFFactor", shadowDebug.pcfFactor);
 
 	lighhtVolumeShader.setVec3("_ShadowLight.color", glm::vec3(1.0));
 	lighhtVolumeShader.setVec3("_ShadowLight.pos", lightVec);
@@ -565,7 +529,7 @@ int main() {
 
 	setLightData();
 
-	sphere.load(ew::createSphere(4, 10));
+	sphere.load(ew::createSphere(6, 10));
 	debugSphere.load(ew::createSphere(0.5f, 4));
 
 	//Initialize fullscreen quad
@@ -614,16 +578,32 @@ void drawUI() {
 
 	ImGui::Begin("Settings");
 
+	ImGui::Text("Material Settings");
 	ImGui::SliderFloat("AmbientK", &currMat.ambientK, 0.0, 1.0);
 	ImGui::SliderFloat("DiffuseK", &currMat.diffuseK, 0.0, 1.0);
 	ImGui::SliderFloat("SpecularK", &currMat.specularK, 0.0, 1.0);
 	ImGui::SliderFloat("Shininess", &currMat.shininess, 2.0, 1024.0);
 
+	ImGui::Dummy({ 2, 20 });
+
+	ImGui::Text("Shadow Settings");
+	ImGui::SliderFloat("Shadow Bias", &shadowDebug.bias, 0.0, 0.01, "%.4f");
+	ImGui::SliderInt("Shadow PCF Factor", &shadowDebug.pcfFactor, 0.0, 10);
+
+	ImGui::Dummy({ 2, 20 });
+
+	ImGui::Text("G-Buffer");
+	ImGui::Text("Color");
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.color, ImVec2(800, 600));
+	ImGui::Text("Position");
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.position, ImVec2(800, 600));
+	ImGui::Text("Normal");
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.normal, ImVec2(800, 600));
+	ImGui::Text("Lighting");
 	ImGui::Image((ImTextureID)(intptr_t)lightVolumeFBO.color, ImVec2(800, 600));
+	ImGui::Text("Material");
 	ImGui::Image((ImTextureID)(intptr_t)framebuffer.material, ImVec2(800, 600));
+	ImGui::Text("Shadow Depth");
 	ImGui::Image((ImTextureID)(intptr_t)depthBuffer.depth, ImVec2(shadowScreenWidth, shadowScreenHeight));
 
 	ImGui::End();

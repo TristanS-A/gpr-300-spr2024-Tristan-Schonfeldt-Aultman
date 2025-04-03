@@ -29,8 +29,8 @@ struct Material
 uniform vec3 _CamPos;
 uniform mat4 _LightViewProj;
 
-const int PCFFactor = 1;
-const float ShadowBias = 0.01;
+uniform int _PCFFactor = 1;
+uniform float _ShadowBias = 0.01;
 
 vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal, vec2 UV, vec4 matInfo)
 {
@@ -45,7 +45,7 @@ vec3 calculateLighting(vec3 lightDir, vec3 worldPos, vec3 normal, vec2 UV, vec4 
 	vec3 diffuse = vec3(nDotL * matInfo.g);
 	vec3 specular = vec3(pow(nDotH, matInfo.a) * matInfo.b);
 
-	return (diffuse + specular);
+	return (diffuse + specular) * _Light.color;
 }
 
 //Calculates shadows using shadow map
@@ -65,23 +65,35 @@ float shadowCalculations(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 
 	float currentDepth = projectionCoords.z;
 
-	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), ShadowBias);  //Scales bias to light angle
+	float bias = max(0.01 * (1.0 - dot(normal, lightDir)), _ShadowBias);  //Scales bias to light angle
 
-	//Calculates PCF
-	float shadow = 0.0;
-	vec2 texelSize = 1.0 / textureSize(_ShadowMap, 0);
-	int num = 0;
-	for (int x = -PCFFactor; x < PCFFactor; ++x)
+	//Branch for ImGui to show PCF vs no PCF
+	if (_PCFFactor != 0)
 	{
-		for (int y = -PCFFactor; y < PCFFactor; ++y)
+		//Calculates PCF
+		float shadow = 0.0;
+		vec2 texelSize = 1.0 / textureSize(_ShadowMap, 0);
+		int num = 0;
+		for (int x = -_PCFFactor; x < _PCFFactor; ++x)
 		{
-			float pcfDepth = texture(_ShadowMap, projectionCoords.xy + vec2(x, y) * texelSize).r;
-			shadow += ((currentDepth - bias) > pcfDepth) ? 1.0 : 0.0;
-			num++;
+			for (int y = -_PCFFactor; y < _PCFFactor; ++y)
+			{
+				float pcfDepth = texture(_ShadowMap, projectionCoords.xy + vec2(x, y) * texelSize).r;
+				shadow += ((currentDepth - bias) > pcfDepth) ? 1.0 : 0.0;
+				num++;
+			}
 		}
-	}
 
-	return shadow / (PCFFactor * 2 * PCFFactor * 2);
+		return shadow / (_PCFFactor * 2 * _PCFFactor * 2);
+	}
+	else 
+	{
+		float closestDepth = texture(_ShadowMap, projectionCoords.xy).r;
+		float currentDepth = projectionCoords.z;
+
+		float shadow = ((currentDepth - bias) > closestDepth) ? 1.0 : 0.0;
+		return shadow;
+	}
 }
 
 float calculateAttentuation(float dist, float radius)
@@ -108,6 +120,6 @@ void main()
 
 	vec3 lighting = calculateLighting(normalizedLightDir, worldPos, normal, UV, materialInfo) + albedo * materialInfo.r;
 
-	vec3 lightColor = lighting * _Light.color * attentuation * (1.0 - shadow);
+	vec3 lightColor = lighting * attentuation * (1.0 - shadow);
 	fragColor0 = vec4(lightColor * albedo, 1.0);
 }
